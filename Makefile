@@ -66,8 +66,11 @@ $(INITRD_IMG): $(USER_BINS)
 	cp $(USER_BINS) $(INITRD_DIR)/bin/
 	tar -cf $(INITRD_IMG) -C $(INITRD_DIR) .
 
-# Regla genérica para compilar programas de usuario
-user/%: user/%.c
+# Reglas para compilar programas de usuario
+user/hello: user/hello.c
+	$(GCC) -m32 -ffreestanding -nostdlib -T user/link.ld $< -o $@
+
+user/shell: user/shell.c
 	$(GCC) -m32 -ffreestanding -nostdlib -T user/link.ld $< -o $@
 
 .PHONY: all run clean

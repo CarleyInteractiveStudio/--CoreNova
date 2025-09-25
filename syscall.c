@@ -38,6 +38,55 @@ static void sys_exec(const char* path) {
     // Un sistema más avanzado necesitaría un mejor manejo de la memoria.
 }
 
+extern volatile task_t* current_task;
+extern uint32_t schedule(uint32_t current_esp);
+
+static void sys_exit(int exit_code) {
+    current_task->state = TASK_ZOMBIE;
+    current_task->exit_code = exit_code;
+
+    // Despertar al padre si está esperando.
+    if (current_task->parent && current_task->parent->state == TASK_WAITING) {
+        current_task->parent->state = TASK_READY;
+    }
+
+    // Forzar un cambio de tarea.
+    asm volatile("int $0x20"); // Llama a la interrupción del temporizador
+}
+
+extern volatile task_t* task_queue;
+
+static int sys_waitpid(int pid) {
+    task_t* parent = (task_t*)current_task;
+    task_t* current = (task_t*)task_queue;
+
+    while(1) {
+        if (current->next->parent == parent && current->next->state == TASK_ZOMBIE) {
+            // Encontramos un hijo zombi. Lo limpiamos.
+            task_t* child_to_clean = current->next;
+            current->next = child_to_clean->next;
+
+            // Liberar memoria (la pila y el TCB)
+            kfree((void*)(child_to_clean->esp - 4096));
+            kfree(child_to_clean);
+            return 0; // Éxito
+        }
+        current = current->next;
+        if (current == task_queue) {
+            // Dimos la vuelta completa y no encontramos hijos zombis.
+            // Poner al padre a esperar.
+            parent->state = TASK_WAITING;
+            asm volatile("int $0x20"); // Ceder control
+        }
+    }
+}
+
+void keyboard_read(char* buffer);
+
+static void sys_read(char* buffer) {
+    keyboard_read(buffer);
+}
+
 // El manejador principal de llamadas al sistema.
 void syscall_handler(regs_t* r) {
     // El número de la llamada al sistema está en EAX.
@@ -47,6 +96,15 @@ void syscall_handler(regs_t* r) {
             break;
         case 2: // Syscall 2: exec
             sys_exec((const char*)r->ebx);
+            break;
+        case 3: // Syscall 3: exit
+            sys_exit(r->ebx);
+            break;
+        case 4: // Syscall 4: waitpid
+            sys_waitpid(r->ebx);
+            break;
+        case 5: // Syscall 5: read
+            sys_read((char*)r->ebx);
             break;
         // ... aquí irían más casos para futuras syscalls ...
         default:

@@ -3,10 +3,10 @@
 #include <stddef.h> // Para NULL
 
 // La tarea que se está ejecutando actualmente.
-volatile task_t *current_task;
+task_t *current_task;
 
 // La cola de tareas listas para ejecutarse.
-volatile task_t *task_queue;
+task_t *task_queue;
 
 // Próximo ID de proceso a asignar.
 uint32_t next_pid = 1;
@@ -18,6 +18,8 @@ void tasking_init() {
     // Crear la primera tarea (el kernel).
     current_task = (task_t*)kmalloc(sizeof(task_t));
     current_task->id = next_pid++;
+    current_task->state = TASK_RUNNING;
+    current_task->parent = NULL; // El kernel no tiene padre.
     current_task->esp = 0; // El esp del kernel se manejará de forma especial.
     current_task->next = (struct task*)current_task; // La cola circular solo tiene un elemento.
 
@@ -30,6 +32,8 @@ void tasking_init() {
 void create_task(void (*entry_point)(void), int is_user) {
     task_t* new_task = (task_t*)kmalloc(sizeof(task_t));
     new_task->id = next_pid++;
+    new_task->state = TASK_READY;
+    new_task->parent = (task_t*)current_task;
 
     // Asignar una pila para la nueva tarea.
     uint32_t stack = (uint32_t)kmalloc(4096); // Pila de 4KB.
@@ -60,8 +64,21 @@ uint32_t schedule(uint32_t current_esp) {
     // Guardar el puntero de la pila de la tarea actual.
     current_task->esp = current_esp;
 
-    // Avanzar a la siguiente tarea en la cola circular.
-    current_task = current_task->next;
+    // Avanzar a la siguiente tarea en la cola circular que esté lista.
+    task_t *next_task = (task_t*)current_task->next;
+    while (next_task->state != TASK_READY) {
+        next_task = next_task->next;
+        if (next_task == current_task) { // Si dimos la vuelta completa
+             // No hay otras tareas listas, no cambiar de contexto.
+            return current_esp;
+        }
+    }
+
+    if (current_task->state == TASK_RUNNING) {
+        current_task->state = TASK_READY;
+    }
+    next_task->state = TASK_RUNNING;
+    current_task = next_task;
 
     // Devolver el puntero de la pila de la nueva tarea.
     return current_task->esp;

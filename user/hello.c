@@ -8,9 +8,8 @@ int main() {
     // EAX=1 (sys_print), EBX=puntero al mensaje.
     asm volatile ("int $0x80" : : "a"(1), "b"(msg));
 
-    // Los programas de usuario deberían tener una syscall para salir.
-    // Como no la tenemos, entramos en un bucle infinito.
-    while(1);
+    // Llamada al sistema para salir del programa.
+    asm volatile ("int $0x80" : : "a"(3), "b"(0));
 
-    return 0;
+    return 0; // Esta línea nunca se alcanzará.
 }

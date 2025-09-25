@@ -10,12 +10,23 @@ typedef struct regs
     uint32_t eip, cs, eflags;                       // Guardados manualmente por la CPU en una interrupción
 } regs_t;
 
+// Enumeración de los estados de una tarea
+typedef enum {
+    TASK_READY,
+    TASK_RUNNING,
+    TASK_WAITING,
+    TASK_ZOMBIE,
+} task_state_t;
+
 // Estructura del Bloque de Control de Tareas (TCB)
 typedef struct task
 {
     int id;                 // ID de la tarea
+    task_state_t state;     // Estado actual de la tarea
     uint32_t esp;           // Puntero a la pila de la tarea
     struct task* next;      // Siguiente tarea en la lista
+    int exit_code;          // Código de salida cuando la tarea es ZOMBIE
+    struct task* parent;    // Tarea padre
 } task_t;
 
 

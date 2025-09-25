@@ -1,20 +1,38 @@
 /* kernel.c - El punto de entrada de nuestro kernel */
 
-/*
- * Escribe un string en una posición específica de la pantalla.
- * La memoria de video en modo texto está en la dirección 0xB8000.
- * Cada celda de la pantalla consta de 2 bytes:
- *   - 1 byte para el código del carácter ASCII.
- *   - 1 byte para el atributo de color (ej: 0x07 es blanco sobre negro).
- */
+// Posición actual del cursor
+int cursor_x = 0;
+int cursor_y = 0;
+
 void kprint(const char *str, int line) {
     volatile unsigned char *video_memory = (unsigned char *)0xB8000;
-    int offset = line * 80 * 2; // 80 columnas, 2 bytes por caracter
-    video_memory += offset;
 
-    for (int i = 0; str[i] != '\0'; ++i) {
-        *video_memory++ = str[i];
-        *video_memory++ = 0x07; // Atributo de color: texto blanco, fondo negro.
+    if (line != -1) {
+        cursor_x = 0;
+        cursor_y = line;
+    }
+
+    int i = 0;
+    while (str[i] != '\0') {
+        if (str[i] == '\n') {
+            cursor_y++;
+            cursor_x = 0;
+        } else if (str[i] == '\b') {
+            if (cursor_x > 0) {
+                cursor_x--;
+                video_memory[(cursor_y * 80 + cursor_x) * 2] = ' ';
+            }
+        } else {
+            video_memory[(cursor_y * 80 + cursor_x) * 2] = str[i];
+            video_memory[(cursor_y * 80 + cursor_x) * 2 + 1] = 0x07;
+            cursor_x++;
+        }
+
+        if (cursor_x >= 80) {
+            cursor_x = 0;
+            cursor_y++;
+        }
+        i++;
     }
 }
 
@@ -136,11 +154,11 @@ void kmain(uint32_t mboot_ptr, uint32_t initrd_addr) {
     kprint("Initrd montado como sistema de archivos.", 6);
 
     // --- Tarea Init ---
-    // Esta tarea del kernel simplemente lanzará el primer programa de usuario.
+    // Esta tarea del kernel simplemente lanzará el primer programa de usuario: el shell.
     void init_task() {
-        const char* path = "/bin/hello";
+        const char* path = "/bin/shell";
         asm volatile ("int $0x80" : : "a"(2), "b"(path));
-        // Esta tarea terminará después de lanzar el programa.
+        // Esta tarea terminará después de lanzar el shell.
         // En un sistema real, aquí se implementaría una syscall de 'exit'.
     }
 
