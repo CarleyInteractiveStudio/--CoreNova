@@ -24,3 +24,13 @@ keyboard_interrupt_handler:
     ; La instrucción iret (interrupt return) saca de la pila
     ; EIP, CS, EFLAGS, ESP y SS, restaurando el estado del programa interrumpido.
     iret
+
+; --- Manejador de Interrupción del Temporizador (IRQ0) ---
+global timer_interrupt_handler
+extern timer_handler
+
+timer_interrupt_handler:
+    pusha
+    call timer_handler
+    popa
+    iret
