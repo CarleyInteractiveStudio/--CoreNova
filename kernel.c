@@ -33,6 +33,8 @@ void clear_screen() {
 
 #include "memory.h" // Para memory_init
 #include "paging.h" // Para paging_init
+#include "kheap.h"  // Para kheap_init, kmalloc, kfree
+#include <stddef.h> // Para NULL
 
 // Declaraciones de las funciones de inicialización que hemos creado.
 void idt_init();
@@ -91,6 +93,18 @@ void kmain(void) {
 
     paging_init();
     kprint("¡Paginacion activada!", 3);
+
+    kheap_init();
+    kprint("Heap inicializado.", 4);
+
+    // Prueba de kmalloc
+    void* test_mem = kmalloc(128);
+    if (test_mem != NULL) {
+        kprint("kmalloc funciona!", 5);
+        kfree(test_mem);
+    } else {
+        kprint("kmalloc fallo.", 5);
+    }
 
     // Inicializar el sistema de interrupciones, el teclado y el temporizador.
     idt_init();
