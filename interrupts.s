@@ -31,7 +31,14 @@ extern timer_handler
 
 timer_interrupt_handler:
     pusha
+
+    mov eax, esp      ; Mover el puntero de la pila actual a EAX.
+    push eax          ; Ponerlo en la pila como argumento para timer_handler.
     call timer_handler
+    pop eax           ; Limpiar el argumento de la pila.
+
+    mov esp, eax      ; Cargar el nuevo puntero de la pila devuelto por schedule.
+
     popa
     iret
 

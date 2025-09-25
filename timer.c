@@ -17,12 +17,18 @@ static inline void outb(uint16_t port, uint8_t val) {
     asm volatile ( "outb %0, %1" : : "a"(val), "Nd"(port) );
 }
 
+// Declaración de la función schedule de task.c
+uint32_t schedule(uint32_t current_esp);
+
 // Esta función es llamada en cada interrupción del temporizador.
-void timer_handler() {
+void timer_handler(uint32_t esp) {
     ticks++;
 
     // Enviar "Fin de Interrupción" (EOI) al controlador de interrupciones.
     outb(0x20, 0x20);
+
+    // Llamar al planificador para cambiar de tarea.
+    schedule(esp);
 }
 
 // Inicializa el temporizador (PIT).

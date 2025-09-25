@@ -18,7 +18,7 @@ QEMUFLAGS = -kernel carleyos.bin -nographic
 
 # Archivos fuente
 SOURCES_ASM = boot.s interrupts.s
-SOURCES_C = kernel.c idt.c keyboard.c timer.c memory.c paging.c kheap.c
+SOURCES_C = kernel.c idt.c keyboard.c timer.c memory.c paging.c kheap.c task.c
 
 # Archivos objeto
 OBJECTS_ASM = $(SOURCES_ASM:.s=.o)

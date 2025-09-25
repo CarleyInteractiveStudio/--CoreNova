@@ -35,6 +35,7 @@ void clear_screen() {
 #include "paging.h" // Para paging_init
 #include "kheap.h"  // Para kheap_init, kmalloc, kfree
 #include <stddef.h> // Para NULL
+#include "task.h"   // Para tasking_init, create_task
 
 // Declaraciones de las funciones de inicialización que hemos creado.
 void idt_init();
@@ -97,6 +98,9 @@ void kmain(void) {
     kheap_init();
     kprint("Heap inicializado.", 4);
 
+    tasking_init();
+    kprint("Tasking inicializado.", 5);
+
     // Prueba de kmalloc
     void* test_mem = kmalloc(128);
     if (test_mem != NULL) {
@@ -118,7 +122,30 @@ void kmain(void) {
     int seconds = 0;
     char seconds_str[12];
 
-    // Bucle principal del kernel.
+    // --- Tareas de prueba ---
+    int counter_a = 0;
+    int counter_b = 0;
+
+    void task_one() {
+        while (1) {
+            kprint("A", 10);
+            for (volatile int i = 0; i < 10000000; i++); // Retardo
+            counter_a++;
+        }
+    }
+
+    void task_two() {
+        while (1) {
+            kprint("B", 11);
+            for (volatile int i = 0; i < 10000000; i++); // Retardo
+            counter_b++;
+        }
+    }
+
+    create_task(task_one);
+    create_task(task_two);
+
+    // El kernel ahora se convierte en una tarea más, que actualiza el uptime.
     while (1) {
         if (ticks >= last_ticks + 100) {
             last_ticks = ticks;
