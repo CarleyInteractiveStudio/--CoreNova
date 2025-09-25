@@ -18,7 +18,7 @@ QEMUFLAGS = -kernel carleyos.bin -nographic
 
 # Archivos fuente
 SOURCES_ASM = boot.s interrupts.s gdt_asm.s
-SOURCES_C = kernel.c idt.c keyboard.c timer.c memory.c paging.c kheap.c task.c gdt.c syscall.c
+SOURCES_C = kernel.c idt.c keyboard.c timer.c memory.c paging.c kheap.c task.c gdt.c syscall.c vfs.c tarfs.c
 
 # Archivos objeto
 OBJECTS_ASM = $(SOURCES_ASM:.s=.o)
@@ -42,12 +42,32 @@ $(OUTPUT): $(OBJECTS_ASM) $(OBJECTS_C)
 %.o: %.c
 	$(GCC) $(GCCFLAGS) -c $< -o $@
 
+USER_SOURCES = $(wildcard user/*.c)
+USER_OBJECTS = $(USER_SOURCES:.c=.o)
+USER_BINS = $(USER_SOURCES:.c=)
+
+INITRD_DIR = initrd
+INITRD_IMG = initrd.tar
+
 # Regla para ejecutar en QEMU
 run: all
-	$(QEMU) $(QEMUFLAGS)
+	$(QEMU) $(QEMUFLAGS) -initrd $(INITRD_IMG)
 
 # Regla para limpiar los archivos generados
 clean:
 	rm -f $(OUTPUT) $(OBJECTS_ASM) $(OBJECTS_C)
+	rm -rf $(INITRD_DIR) $(INITRD_IMG) $(USER_OBJECTS) $(USER_BINS)
+
+# --- Reglas para el Initrd ---
+all: $(INITRD_IMG)
+
+$(INITRD_IMG): $(USER_BINS)
+	mkdir -p $(INITRD_DIR)/bin
+	cp $(USER_BINS) $(INITRD_DIR)/bin/
+	tar -cf $(INITRD_IMG) -C $(INITRD_DIR) .
+
+# Regla genérica para compilar programas de usuario
+user/%: user/%.c
+	$(GCC) -m32 -ffreestanding -nostdlib -T user/link.ld $< -o $@
 
 .PHONY: all run clean

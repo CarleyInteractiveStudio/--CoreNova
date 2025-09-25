@@ -36,6 +36,7 @@ void clear_screen() {
 #include "kheap.h"  // Para kheap_init, kmalloc, kfree
 #include <stddef.h> // Para NULL
 #include "task.h"   // Para tasking_init, create_task
+#include "tarfs.h"  // Para tarfs_init
 
 // Declaraciones de las funciones de inicialización que hemos creado.
 void idt_init();
@@ -86,7 +87,7 @@ void syscalls_init();
 /*
  * Esta es la función principal de nuestro kernel, llamada desde boot.s
  */
-void kmain(void) {
+void kmain(uint32_t mboot_ptr, uint32_t initrd_addr) {
     clear_screen();
     kprint("Bienvenido a CarleyOS", 0);
 
@@ -130,17 +131,20 @@ void kmain(void) {
     int seconds = 0;
     char seconds_str[12];
 
-    // --- Tarea de prueba de Espacio de Usuario ---
-    void user_test_task() {
-        const char* msg = "Hola desde el espacio de usuario!";
-        while(1) {
-            // Llamada al sistema para imprimir
-            asm volatile ("int $0x80" : : "a"(1), "b"(msg));
-            for (volatile int i = 0; i < 10000000; i++); // Retardo
-        }
+    // Montar el sistema de archivos initrd.
+    tarfs_init(initrd_addr);
+    kprint("Initrd montado como sistema de archivos.", 6);
+
+    // --- Tarea Init ---
+    // Esta tarea del kernel simplemente lanzará el primer programa de usuario.
+    void init_task() {
+        const char* path = "/bin/hello";
+        asm volatile ("int $0x80" : : "a"(2), "b"(path));
+        // Esta tarea terminará después de lanzar el programa.
+        // En un sistema real, aquí se implementaría una syscall de 'exit'.
     }
 
-    create_task(user_test_task, 1); // 1 = es una tarea de usuario
+    create_task(init_task, 0); // 0 = es una tarea de kernel
 
     // El kernel ahora se convierte en la tarea 'idle'.
     while (1) {

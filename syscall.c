@@ -14,12 +14,39 @@ static void sys_print(const char* message) {
     kprint(message, 15); // Imprimir en la línea 15 para la prueba.
 }
 
+#include "vfs.h"
+#include "kheap.h"
+
+// Declaración de funciones externas
+extern fs_node_t* finddir_fs(fs_node_t *node, char *name);
+extern uint32_t read_fs(fs_node_t *node, uint32_t offset, uint32_t size, uint8_t *buffer);
+extern void create_task(void (*entry_point)(void), int is_user);
+extern fs_node_t* fs_root;
+
+static void sys_exec(const char* path) {
+    fs_node_t* node = finddir_fs(fs_root, (char*)path);
+    if (!node) {
+        // Archivo no encontrado
+        return;
+    }
+
+    uint8_t* buffer = (uint8_t*)kmalloc(node->length);
+    read_fs(node, 0, node->length, buffer);
+
+    create_task((void(*)())buffer, 1);
+    // Nota: El buffer no se libera aquí, se convierte en el código de la app.
+    // Un sistema más avanzado necesitaría un mejor manejo de la memoria.
+}
+
 // El manejador principal de llamadas al sistema.
 void syscall_handler(regs_t* r) {
     // El número de la llamada al sistema está en EAX.
     switch (r->eax) {
         case 1: // Syscall 1: print
             sys_print((const char*)r->ebx);
+            break;
+        case 2: // Syscall 2: exec
+            sys_exec((const char*)r->ebx);
             break;
         // ... aquí irían más casos para futuras syscalls ...
         default:
