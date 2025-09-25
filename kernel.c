@@ -29,14 +29,26 @@ void clear_screen() {
     }
 }
 
+// Declaraciones de las funciones de inicialización que hemos creado.
+void idt_init();
+void keyboard_init();
+
 /*
  * Esta es la función principal de nuestro kernel, llamada desde boot.s
  */
 void kmain(void) {
     clear_screen();
     kprint("Bienvenido a CarleyOS", 0);
-    kprint("El viaje ha comenzado.", 2);
+    kprint("Ahora puedes escribir...", 2);
+
+    // Inicializar el sistema de interrupciones y el teclado.
+    idt_init();
+    keyboard_init();
+
+    // Habilitar las interrupciones. A partir de este punto, el sistema puede reaccionar.
+    asm volatile ("sti");
 
     // El kernel nunca debe terminar, así que entramos en un bucle infinito.
+    // Las interrupciones seguirán funcionando en segundo plano.
     for (;;);
 }
