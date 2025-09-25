@@ -1,76 +1,49 @@
-# Makefile para CarleyOS
+# Makefile para CarleyOS (x86_64, GRUB/ISO)
 
 # Herramientas
 ASM = nasm
 GCC = gcc
 LD = ld
-QEMU = qemu-system-i386
+GRUB = grub-mkrescue
+QEMU = qemu-system-x86_64
 
-# Banderas de compilación
-# -felf32: Formato de salida ELF de 32 bits.
-# -ffreestanding: No asumir que hay una biblioteca estándar.
-# -nostdlib: No enlazar con bibliotecas estándar.
-# -lgcc: Enlazar con la biblioteca de ayuda de GCC.
-ASMFLAGS = -f elf32
-GCCFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra
-LDFLAGS = -m elf_i386 -T linker.ld
-QEMUFLAGS = -kernel carleyos.bin -nographic
+# Banderas
+ASMFLAGS = -f elf64
+GCCFLAGS = -m64 -ffreestanding -O2 -Wall -Wextra -nostdlib -fno-pie -fno-stack-protector
+LDFLAGS = -T linker.ld
+QEMUFLAGS = -cdrom carleyos.iso -nographic
 
-# Archivos fuente
-SOURCES_ASM = boot.s interrupts.s gdt_asm.s
-SOURCES_C = kernel.c idt.c keyboard.c timer.c memory.c paging.c kheap.c task.c gdt.c syscall.c vfs.c tarfs.c
-
-# Archivos objeto
+# Archivos
+SOURCES_ASM = boot.s
+SOURCES_C = kernel.c
 OBJECTS_ASM = $(SOURCES_ASM:.s=.o)
 OBJECTS_C = $(SOURCES_C:.c=.o)
+KERNEL_BIN = carleyos.bin
+ISO_FILE = carleyos.iso
 
-# Nombre del archivo de salida
-OUTPUT = carleyos.bin
+# Reglas
+all: $(ISO_FILE)
 
-# Regla por defecto: compila todo
-all: $(OUTPUT)
+$(KERNEL_BIN): $(OBJECTS_ASM) $(OBJECTS_C)
+	$(LD) $(LDFLAGS) -o $(KERNEL_BIN) $(OBJECTS_ASM) $(OBJECTS_C)
 
-# Regla para crear el binario final de CarleyOS
-$(OUTPUT): $(OBJECTS_ASM) $(OBJECTS_C)
-	$(LD) $(LDFLAGS) -o $(OUTPUT) $(OBJECTS_ASM) $(OBJECTS_C)
-
-# Regla para compilar los archivos de ensamblador
 %.o: %.s
 	$(ASM) $(ASMFLAGS) $< -o $@
 
-# Regla para compilar los archivos de C
 %.o: %.c
 	$(GCC) $(GCCFLAGS) -c $< -o $@
 
-USER_SOURCES = $(wildcard user/*.c)
-USER_OBJECTS = $(USER_SOURCES:.c=.o)
-USER_BINS = $(USER_SOURCES:.c=)
+$(ISO_FILE): $(KERNEL_BIN) grub.cfg
+	mkdir -p iso/boot/grub
+	cp $(KERNEL_BIN) iso/boot/
+	cp grub.cfg iso/boot/grub/
+	$(GRUB) -o $(ISO_FILE) iso
 
-INITRD_DIR = initrd
-INITRD_IMG = initrd.tar
-
-# Regla para ejecutar en QEMU
 run: all
-	$(QEMU) $(QEMUFLAGS) -initrd $(INITRD_IMG)
+	$(QEMU) $(QEMUFLAGS)
 
-# Regla para limpiar los archivos generados
 clean:
-	rm -f $(OUTPUT) $(OBJECTS_ASM) $(OBJECTS_C)
-	rm -rf $(INITRD_DIR) $(INITRD_IMG) $(USER_OBJECTS) $(USER_BINS)
-
-# --- Reglas para el Initrd ---
-all: $(INITRD_IMG)
-
-$(INITRD_IMG): $(USER_BINS)
-	mkdir -p $(INITRD_DIR)/bin
-	cp $(USER_BINS) $(INITRD_DIR)/bin/
-	tar -cf $(INITRD_IMG) -C $(INITRD_DIR) .
-
-# Reglas para compilar programas de usuario
-user/hello: user/hello.c
-	$(GCC) -m32 -ffreestanding -nostdlib -T user/link.ld $< -o $@
-
-user/shell: user/shell.c
-	$(GCC) -m32 -ffreestanding -nostdlib -T user/link.ld $< -o $@
+	rm -f $(KERNEL_BIN) $(OBJECTS_ASM) $(OBJECTS_C)
+	rm -rf iso $(ISO_FILE)
 
 .PHONY: all run clean

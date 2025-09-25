@@ -1,38 +1,31 @@
-/* linker.ld - Script del enlazador para nuestro kernel. */
+/* linker.ld - Script de enlazador correcto para Multiboot2 en x86_64 */
 ENTRY(_start)
-OUTPUT_FORMAT(elf32-i386)
 
 SECTIONS
 {
-    /* Empezar a cargar en la dirección de memoria 1MB. */
-    . = 1M;
+    . = 1M; /* Cargar en 1MB */
+    _kernel_start = .;
 
-    /* Primero, la sección de texto del bootloader. */
-    .text :
+    /* La sección .boot debe estar primero y alineada */
+    .boot ALIGN(4K) :
     {
-        *(.multiboot)
+        KEEP(*(.multiboot_header))
+    }
+
+    .text ALIGN(4K) :
+    {
         *(.text)
     }
 
-    /* Datos de solo lectura. */
-    .rodata :
+    .rodata ALIGN(4K) :
     {
         *(.rodata)
     }
 
-    /* Datos inicializados. */
-    .data :
+    .bss ALIGN(4K) :
     {
-        *(.data)
-    }
-
-    /* Datos no inicializados (BSS). */
-    .bss :
-    {
-        *(COMMON)
         *(.bss)
     }
 
-    /* El símbolo 'end' marcará el final de nuestro kernel. */
-    end = .;
+    _kernel_end = .;
 }
