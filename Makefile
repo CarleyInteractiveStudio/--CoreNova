@@ -17,8 +17,8 @@ LDFLAGS = -m elf_i386 -T linker.ld
 QEMUFLAGS = -kernel carleyos.bin -nographic
 
 # Archivos fuente
-SOURCES_ASM = boot.s interrupts.s
-SOURCES_C = kernel.c idt.c keyboard.c timer.c memory.c paging.c kheap.c task.c
+SOURCES_ASM = boot.s interrupts.s gdt_asm.s
+SOURCES_C = kernel.c idt.c keyboard.c timer.c memory.c paging.c kheap.c task.c gdt.c syscall.c
 
 # Archivos objeto
 OBJECTS_ASM = $(SOURCES_ASM:.s=.o)

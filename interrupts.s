@@ -42,6 +42,21 @@ timer_interrupt_handler:
     popa
     iret
 
+; --- Manejador de Llamadas al Sistema (int 0x80) ---
+global syscall_interrupt_handler
+extern syscall_handler
+
+syscall_interrupt_handler:
+    pusha
+
+    mov eax, esp      ; Pasa un puntero a los registros guardados a syscall_handler
+    push eax
+    call syscall_handler
+    pop eax
+
+    popa
+    iret
+
 ; --- Cargar el Directorio de Páginas y Activar la Paginación ---
 global load_page_directory_and_enable_paging
 load_page_directory_and_enable_paging:

@@ -80,12 +80,19 @@ void itoa(int n, char str[]) {
 }
 
 
+void gdt_init();
+void syscalls_init();
+
 /*
  * Esta es la función principal de nuestro kernel, llamada desde boot.s
  */
 void kmain(void) {
     clear_screen();
     kprint("Bienvenido a CarleyOS", 0);
+
+    gdt_init();
+    kprint("GDT y TSS cargadas.", 1);
+
     kprint("Cerebro en construcción...", 2);
 
     // Suponemos 16MB de memoria para este ejemplo.
@@ -110,8 +117,9 @@ void kmain(void) {
         kprint("kmalloc fallo.", 5);
     }
 
-    // Inicializar el sistema de interrupciones, el teclado y el temporizador.
+    // Inicializar el sistema de interrupciones, el teclado, el temporizador y las syscalls.
     idt_init();
+    syscalls_init();
     keyboard_init();
     timer_init(100); // Iniciar el temporizador a 100Hz
 
@@ -122,30 +130,19 @@ void kmain(void) {
     int seconds = 0;
     char seconds_str[12];
 
-    // --- Tareas de prueba ---
-    int counter_a = 0;
-    int counter_b = 0;
-
-    void task_one() {
-        while (1) {
-            kprint("A", 10);
+    // --- Tarea de prueba de Espacio de Usuario ---
+    void user_test_task() {
+        const char* msg = "Hola desde el espacio de usuario!";
+        while(1) {
+            // Llamada al sistema para imprimir
+            asm volatile ("int $0x80" : : "a"(1), "b"(msg));
             for (volatile int i = 0; i < 10000000; i++); // Retardo
-            counter_a++;
         }
     }
 
-    void task_two() {
-        while (1) {
-            kprint("B", 11);
-            for (volatile int i = 0; i < 10000000; i++); // Retardo
-            counter_b++;
-        }
-    }
+    create_task(user_test_task, 1); // 1 = es una tarea de usuario
 
-    create_task(task_one);
-    create_task(task_two);
-
-    // El kernel ahora se convierte en una tarea más, que actualiza el uptime.
+    // El kernel ahora se convierte en la tarea 'idle'.
     while (1) {
         if (ticks >= last_ticks + 100) {
             last_ticks = ticks;

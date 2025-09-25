@@ -23,7 +23,7 @@ typedef struct task
 void tasking_init();
 
 // Crea una nueva tarea
-void create_task(void (*entry_point)(void));
+void create_task(void (*entry_point)(void), int is_user);
 
 // Cambia a la siguiente tarea y devuelve el nuevo puntero de la pila.
 uint32_t schedule(uint32_t current_esp);

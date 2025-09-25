@@ -19,7 +19,7 @@ void tasking_init() {
     current_task = (task_t*)kmalloc(sizeof(task_t));
     current_task->id = next_pid++;
     current_task->esp = 0; // El esp del kernel se manejará de forma especial.
-    current_task->next = current_task; // La cola circular solo tiene un elemento.
+    current_task->next = (struct task*)current_task; // La cola circular solo tiene un elemento.
 
     task_queue = current_task;
 
@@ -27,21 +27,25 @@ void tasking_init() {
     asm volatile("sti");
 }
 
-void create_task(void (*entry_point)(void)) {
+void create_task(void (*entry_point)(void), int is_user) {
     task_t* new_task = (task_t*)kmalloc(sizeof(task_t));
     new_task->id = next_pid++;
 
     // Asignar una pila para la nueva tarea.
     uint32_t stack = (uint32_t)kmalloc(4096); // Pila de 4KB.
-    new_task->esp = stack + 4096; // La pila crece hacia abajo.
+    new_task->esp = stack + 4096;
 
     // Preparar la pila para el primer cambio de contexto.
-    // Esto es un poco de magia para que `iret` funcione.
     new_task->esp -= sizeof(regs_t);
     regs_t* regs = (regs_t*)new_task->esp;
     regs->eip = (uint32_t)entry_point;
-    regs->cs = 0x08; // Segmento de código del kernel.
     regs->eflags = 0x202; // Habilita interrupciones.
+
+    if (is_user) {
+        regs->cs = 0x1B;  // Selector de código de usuario (0x18 | 3)
+    } else {
+        regs->cs = 0x08;  // Selector de código de kernel
+    }
 
     // Añadir la nueva tarea a la cola circular.
     new_task->next = task_queue->next;
