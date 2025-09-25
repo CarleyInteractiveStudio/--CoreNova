@@ -31,12 +31,16 @@ void clear_screen() {
 
 #include <stdint.h> // Para uint32_t
 
+#include "memory.h" // Para memory_init
+#include "paging.h" // Para paging_init
+
 // Declaraciones de las funciones de inicialización que hemos creado.
 void idt_init();
 void keyboard_init();
 void timer_init(unsigned int frequency);
 
 extern volatile uint32_t ticks; // La variable de nuestro timer.c
+extern uint32_t end; // Símbolo del linker.ld
 
 // Función simple para convertir un número a string.
 void itoa(int n, char str[]) {
@@ -79,7 +83,14 @@ void itoa(int n, char str[]) {
 void kmain(void) {
     clear_screen();
     kprint("Bienvenido a CarleyOS", 0);
-    kprint("Ahora puedes escribir...", 2);
+    kprint("Cerebro en construcción...", 2);
+
+    // Suponemos 16MB de memoria para este ejemplo.
+    uint32_t mem_size = 16 * 1024 * 1024;
+    memory_init(mem_size, (uint32_t)&end);
+
+    paging_init();
+    kprint("¡Paginacion activada!", 3);
 
     // Inicializar el sistema de interrupciones, el teclado y el temporizador.
     idt_init();

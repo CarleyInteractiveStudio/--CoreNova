@@ -32,4 +32,7 @@ SECTIONS
         *(COMMON)
         *(.bss)
     }
+
+    /* El símbolo 'end' marcará el final de nuestro kernel. */
+    end = .;
 }

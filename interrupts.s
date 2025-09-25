@@ -34,3 +34,15 @@ timer_interrupt_handler:
     call timer_handler
     popa
     iret
+
+; --- Cargar el Directorio de Páginas y Activar la Paginación ---
+global load_page_directory_and_enable_paging
+load_page_directory_and_enable_paging:
+    mov eax, [esp+4]  ; Obtiene la dirección del directorio de páginas.
+    mov cr3, eax      ; Carga la dirección en el registro CR3.
+
+    mov eax, cr0      ; Obtiene el registro de control CR0.
+    or eax, 0x80000000 ; Activa el bit de paginación (bit 31).
+    mov cr0, eax      ; Escribe de nuevo en CR0 para activar la paginación.
+
+    ret
