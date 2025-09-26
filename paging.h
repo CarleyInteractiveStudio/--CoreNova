@@ -8,7 +8,7 @@
 #define PAGE_WRITE      0x2
 #define PAGE_USER       0x4
 
-// Estructura de una entrada de página (común para todos los niveles)
+// Estructura de una entrada de página (común para todos los niveles de la jerarquía)
 typedef struct {
     uint64_t present    : 1;
     uint64_t rw         : 1;
@@ -16,30 +16,17 @@ typedef struct {
     uint64_t accessed   : 1;
     uint64_t dirty      : 1;
     uint64_t unused     : 7;
-    uint64_t frame      : 40; // El resto de los bits para la dirección del marco
+    uint64_t frame      : 40; // Dirección del marco físico (alineada a 4KB)
     uint64_t reserved   : 11;
-    uint64_t nx         : 1;   // No-execute bit
+    uint64_t nx         : 1;   // Bit No-execute
 } __attribute__((packed)) page_entry_t;
 
-// Cada tabla tiene 512 entradas
+// Cada tabla (PML4, PDPT, PD, PT) tiene 512 entradas de 8 bytes (4096 bytes en total)
 #define TABLE_ENTRIES 512
 
-// Estructuras para cada nivel de la jerarquía de paginación
-typedef struct {
+typedef struct page_table {
     page_entry_t entries[TABLE_ENTRIES];
 } __attribute__((aligned(FRAME_SIZE))) page_table_t;
-
-typedef struct {
-    page_table_t* tables[TABLE_ENTRIES];
-} page_directory_t;
-
-typedef struct {
-    page_directory_t* directories[TABLE_ENTRIES];
-} pdpt_t;
-
-typedef struct {
-    pdpt_t* pdpts[TABLE_ENTRIES];
-} pml4_t;
 
 
 // Inicializa la paginación para el kernel

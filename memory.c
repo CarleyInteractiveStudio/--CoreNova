@@ -1,27 +1,30 @@
 #include "memory.h"
 #include <stddef.h> // Para NULL
 
-// Definimos un tamaño máximo de memoria para el bitmap (ej: 4GB)
-#define MAX_FRAMES (0x100000000 / FRAME_SIZE)
-#define MEMORY_MAP_SIZE (MAX_FRAMES / 8)
-
+// Puntero al bitmap. Se asignará dinámicamente.
 static uint8_t* memory_map = NULL;
 static uint64_t total_frames = 0;
-static uint64_t first_available_frame = 0;
 
 // Funciones para manipular los bits del bitmap
 static void set_frame(uint64_t frame_idx) {
+    if (memory_map == NULL || frame_idx >= total_frames) return;
     memory_map[frame_idx / 8] |= (1 << (frame_idx % 8));
 }
 
 static void clear_frame(uint64_t frame_idx) {
+    if (memory_map == NULL || frame_idx >= total_frames) return;
     memory_map[frame_idx / 8] &= ~(1 << (frame_idx % 8));
 }
 
-void memory_init(struct multiboot2_tag_mmap* mmap_tag) {
+static uint8_t test_frame(uint64_t frame_idx) {
+    if (memory_map == NULL || frame_idx >= total_frames) return 1; // Considerar no existente como ocupado
+    return (memory_map[frame_idx / 8] & (1 << (frame_idx % 8))) != 0;
+}
+
+void memory_init(multiboot2_tag_mmap_t* mmap_tag) {
     multiboot2_mmap_entry_t* mmap_entry;
 
-    // 1. Encontrar el tamaño total de la memoria para calcular el tamaño del bitmap
+    // 1. Encontrar el tamaño total de la memoria
     uint64_t highest_addr = 0;
     for (mmap_entry = mmap_tag->entries;
          (uint8_t*)mmap_entry < (uint8_t*)mmap_tag + mmap_tag->size;
@@ -60,23 +63,19 @@ void memory_init(struct multiboot2_tag_mmap* mmap_tag) {
         }
     }
 
-    // 5. Marcar los marcos del kernel y del bitmap como en uso
-    // (Suponemos que el kernel está en el primer mega y el bitmap donde lo pusimos)
-    uint32_t kernel_frames = (1024 * 1024) / FRAME_SIZE; // 1MB
+    // 5. Marcar los marcos del kernel (primer MB) y del bitmap como en uso
+    uint32_t kernel_frames = (1024 * 1024) / FRAME_SIZE;
     for (uint32_t i = 0; i < kernel_frames; i++) set_frame(i);
-    for (uint64_t i = 0; i < bitmap_size / FRAME_SIZE; i++) set_frame(((uint64_t)memory_map / FRAME_SIZE) + i);
+    for (uint64_t i = 0; i < (bitmap_size + FRAME_SIZE -1) / FRAME_SIZE; i++) {
+        set_frame(((uint64_t)memory_map / FRAME_SIZE) + i);
+    }
 }
 
 uint64_t alloc_frame() {
-    for (uint64_t i = 0; i < total_frames / 8; i++) {
-        if (memory_map[i] != 0xFF) {
-            for (int j = 0; j < 8; j++) {
-                if (!(memory_map[i] & (1 << j))) {
-                    uint64_t frame_idx = i * 8 + j;
-                    set_frame(frame_idx);
-                    return frame_idx * FRAME_SIZE;
-                }
-            }
+    for (uint64_t i = 0; i < total_frames; i++) {
+        if (!test_frame(i)) {
+            set_frame(i);
+            return i * FRAME_SIZE;
         }
     }
     return 0; // No hay memoria
