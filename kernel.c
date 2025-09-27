@@ -1,14 +1,15 @@
-#include "multiboot2.h"
 #include <stdint.h>
-#include <stddef.h>
-#include "memory.h"
-#include "paging.h"
-#include "timer.h"
-#include "idt.h"
 
-// --- Funciones de pantalla (simplificadas) ---
+// Declaraciones de funciones
+void idt_init();
+void timer_init(uint32_t frequency);
+void keyboard_init();
+extern volatile uint64_t ticks;
+
+// --- Funciones de pantalla ---
 volatile char *video_memory = (volatile char*)0xB8000;
-int cursor_x = 0, cursor_y = 0;
+int cursor_x = 0;
+int cursor_y = 0;
 
 void kprint(const char *str) {
     for (int i = 0; str[i] != '\0'; i++) {
@@ -27,46 +28,45 @@ void kprint(const char *str) {
     }
 }
 
+void itoa(uint64_t n, char str[]) {
+    int i = 0;
+    if (n == 0) { str[i++] = '0'; str[i] = '\0'; return; }
+    while (n != 0) { str[i++] = (n % 10) + '0'; n = n / 10; }
+    str[i] = '\0';
+    for (int j = 0; j < i / 2; j++) {
+        char temp = str[j];
+        str[j] = str[i - j - 1];
+        str[i - j - 1] = temp;
+    }
+}
+
 // --- Punto de entrada del Kernel ---
 void kmain(unsigned long magic, unsigned long addr) {
-    kprint("Bienvenido a CarleyOS 64-bit (Cerebro Pro Edition)!\n");
+    (void)magic; (void)addr;
 
-    if (magic != 0x36d76289) {
-        kprint("Error: No se ha arrancado con Multiboot2.\n");
-        for (;;);
-    }
-
-    // Buscar la etiqueta del mapa de memoria
-    multiboot2_tag_mmap_t* mmap_tag = NULL;
-    for (multiboot2_tag_t* tag = (multiboot2_tag_t*)(addr + 8);
-         tag->type != MULTIBOOT2_TAG_TYPE_END;
-         tag = (multiboot2_tag_t*)((uint8_t*)tag + ((tag->size + 7) & ~7))) {
-        if (tag->type == MULTIBOOT2_TAG_TYPE_MMAP) {
-            mmap_tag = (multiboot2_tag_mmap_t*)tag;
-            break;
-        }
-    }
-
-    if (!mmap_tag) {
-        kprint("ERROR: No se encontro el mapa de memoria!\n");
-        for (;;);
-    }
-
-    // Secuencia de inicialización
-    memory_init(mmap_tag);
-    kprint("Gestor de memoria fisica inicializado.\n");
-
-    paging_init();
-    kprint("Paginacion del kernel activada.\n");
+    cursor_y = 5; cursor_x = 10;
+    kprint("CarleyOS 64-bit Base Reconstruida con Exito!\n");
 
     idt_init();
     timer_init(100);
+    keyboard_init();
     asm volatile("sti");
-    kprint("Interrupciones y temporizador activados.\n");
 
-    kprint("Inicializacion completa. Sistema estable.\n");
+    kprint("Sistema de interrupciones listo. Puedes escribir.\n");
+
+    uint64_t last_ticks = 0;
+    char tick_str[20];
 
     for (;;) {
-        asm ("hlt");
+        if (ticks != last_ticks) {
+            last_ticks = ticks;
+            if (last_ticks % 100 == 0) {
+                cursor_x = 0; cursor_y = 0;
+                kprint("Uptime: ");
+                itoa(last_ticks / 100, tick_str);
+                kprint(tick_str);
+                kprint("s   ");
+            }
+        }
     }
 }
