@@ -1,0 +1,2 @@
+Hola desde un archivo en el initrd de CarleyOS!
+Este es un sistema de archivos en RAM.

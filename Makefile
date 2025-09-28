@@ -15,14 +15,18 @@ QEMUFLAGS = -cdrom carleyos.iso -nographic
 
 # Archivos
 SOURCES_ASM = boot.s interrupts.s
-SOURCES_C = kernel.c idt.c timer.c keyboard.c shell.c pmm.c heap.c serial.c task.c
+SOURCES_C = kernel.c idt.c timer.c keyboard.c shell.c pmm.c heap.c serial.c task.c fs.c
 OBJECTS_ASM = $(SOURCES_ASM:.s=.o)
 OBJECTS_C = $(SOURCES_C:.c=.o)
 KERNEL_BIN = carleyos.bin
 ISO_FILE = carleyos.iso
+INITRD_TAR = initrd.tar
 
 # Reglas
 all: $(ISO_FILE)
+
+$(INITRD_TAR): initrd_files/hola.txt initrd_files/info.txt
+	tar -cf $(INITRD_TAR) -C initrd_files .
 
 $(KERNEL_BIN): $(OBJECTS_ASM) $(OBJECTS_C)
 	$(LD) $(LDFLAGS) -o $(KERNEL_BIN) $(OBJECTS_ASM) $(OBJECTS_C)
@@ -33,9 +37,10 @@ $(KERNEL_BIN): $(OBJECTS_ASM) $(OBJECTS_C)
 %.o: %.c
 	$(GCC) $(GCCFLAGS) -c $< -o $@
 
-$(ISO_FILE): $(KERNEL_BIN) grub.cfg
+$(ISO_FILE): $(KERNEL_BIN) $(INITRD_TAR) grub.cfg
 	mkdir -p iso/boot/grub
 	cp $(KERNEL_BIN) iso/boot/
+	cp $(INITRD_TAR) iso/boot/
 	cp grub.cfg iso/boot/grub/
 	$(GRUB) -o $(ISO_FILE) iso
 
@@ -43,7 +48,7 @@ run: all
 	$(QEMU) $(QEMUFLAGS)
 
 clean:
-	rm -f $(KERNEL_BIN) $(OBJECTS_ASM) $(OBJECTS_C)
+	rm -f $(KERNEL_BIN) $(OBJECTS_ASM) $(OBJECTS_C) $(INITRD_TAR)
 	rm -rf iso $(ISO_FILE)
 
 .PHONY: all run clean

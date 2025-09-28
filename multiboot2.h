@@ -29,6 +29,15 @@ struct multiboot_tag {
 
 // --- Estructuras de Etiquetas Específicas ---
 
+// Etiqueta para Módulos (type = 3)
+struct multiboot_tag_module {
+    uint32_t type;
+    uint32_t size;
+    uint32_t mod_start;
+    uint32_t mod_end;
+    char cmdline[]; // El resto son los bytes de la cadena de nombre del módulo
+};
+
 // Etiqueta para el Mapa de Memoria (type = 6)
 struct multiboot_tag_mmap {
     uint32_t type;

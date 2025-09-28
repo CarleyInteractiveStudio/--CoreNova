@@ -6,6 +6,7 @@
 #include "heap.h"
 #include "serial.h"
 #include "task.h"
+#include "fs.h"
 
 // --- Declaraciones de funciones ---
 void idt_init();
@@ -84,6 +85,9 @@ void task_b_func() {
     }
 }
 
+// --- Variables Globales ---
+uintptr_t initrd_start = 0;
+
 // --- Punto de entrada del Kernel ---
 void kmain(unsigned long magic, unsigned long addr) {
     serial_init();
@@ -95,7 +99,26 @@ void kmain(unsigned long magic, unsigned long addr) {
         return;
     }
 
-    // Inicialización de la Memoria
+    // --- Leer etiquetas de Multiboot2 ---
+    struct multiboot_tag *tag;
+    for (tag = (struct multiboot_tag *)(addr + 8);
+         tag->type != MULTIBOOT_TAG_TYPE_END;
+         tag = (struct multiboot_tag *)((uint8_t *)tag + ((tag->size + 7) & ~7)))
+    {
+        if (tag->type == MULTIBOOT_TAG_TYPE_MODULE) {
+            struct multiboot_tag_module *mod_tag = (struct multiboot_tag_module *)tag;
+            initrd_start = mod_tag->mod_start;
+            kprint("Initrd encontrado en: 0x");
+            char s[20];
+            itox(initrd_start, s);
+            kprint(s);
+            kprint("\n");
+        }
+    }
+
+
+    // --- Inicialización de la Memoria y FS ---
+    fs_init();
     pmm_init(addr);
     heap_init();
 

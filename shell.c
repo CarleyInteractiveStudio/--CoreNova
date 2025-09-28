@@ -1,16 +1,16 @@
 #include "shell.h"
 #include "task.h"
+#include "fs.h"
 #include <stdint.h>
+#include <stddef.h> // Para size_t
 
 // --- Declaraciones de funciones externas ---
 extern void kprint(const char *str);
-extern void kprint_char(char c); // Necesitaremos una función para imprimir un solo carácter
-extern void screen_clear(); // Necesitaremos una función para limpiar la pantalla
-extern volatile char *video_memory; // Para `screen_clear`
+extern void kprint_char(char c);
+extern void screen_clear();
 
 // --- Funciones auxiliares de cadenas ---
 
-// Compara dos cadenas. Devuelve 0 si son iguales.
 int strcmp(const char *s1, const char *s2) {
     while (*s1 && (*s1 == *s2)) {
         s1++;
@@ -19,14 +19,14 @@ int strcmp(const char *s1, const char *s2) {
     return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
 
-// Encuentra la primera ocurrencia de un carácter en una cadena.
-const char* strchr(const char* s, int c) {
-    while (*s != (char)c) {
-        if (!*s++) {
-            return 0;
-        }
+int strncmp(const char *s1, const char *s2, size_t n) {
+    if (n == 0) return 0;
+    while (n-- != 0 && *s1 == *s2) {
+        if (n == 0 || *s1 == '\0') break;
+        s1++;
+        s2++;
     }
-    return s;
+    return *(unsigned char *)s1 - *(unsigned char *)s2;
 }
 
 // --- Implementación de la Shell ---
@@ -42,35 +42,40 @@ void shell_handle_line(const char *input) {
         kprint("Comandos disponibles:\n");
         kprint("  help  - Muestra esta ayuda\n");
         kprint("  clear - Limpia la pantalla\n");
-        kprint("  echo  - Repite el texto que le sigue\n");
+        kprint("  ls    - Lista los archivos del initrd\n");
+        kprint("  cat [f] - Muestra el contenido del archivo [f]\n");
+        kprint("  echo [t]- Repite el texto [t]\n");
         kprint("  reboot - Reinicia el sistema\n");
+    } else if (strcmp(input, "ls") == 0) {
+        fs_list_files();
     } else if (strcmp(input, "clear") == 0) {
         screen_clear();
     } else if (strcmp(input, "reboot") == 0) {
-        // Provocar una triple falta para reiniciar (método común en OS dev)
         asm volatile ("int $0x3");
-    } else if (strcmp(input, "") == 0) {
-        // No hacer nada si la línea está vacía
-    }
-    else {
-        // Comprobar si es el comando "echo"
-        const char *echo_cmd = "echo ";
-        int is_echo = 1;
-        for(int i=0; i<5; ++i) {
-            if(input[i] != echo_cmd[i]) {
-                is_echo = 0;
-                break;
-            }
-        }
+    } else if (strncmp(input, "cat ", 4) == 0) {
+        const char* filename = input + 4;
+        uint32_t file_size = 0;
+        char* content = fs_read_file(filename, &file_size);
 
-        if (is_echo && input[4] == ' ') {
-            kprint(input + 5);
+        if (content != NULL) {
+            for (uint32_t i = 0; i < file_size; i++) {
+                kprint_char(content[i]);
+            }
             kprint("\n");
         } else {
-            kprint("Comando desconocido: '");
-            kprint(input);
-            kprint("'\n");
+            kprint("Archivo no encontrado: ");
+            kprint(filename);
+            kprint("\n");
         }
+    } else if (strncmp(input, "echo ", 5) == 0) {
+        kprint(input + 5);
+        kprint("\n");
+    } else if (strcmp(input, "") == 0) {
+        // No hacer nada
+    } else {
+        kprint("Comando desconocido: '");
+        kprint(input);
+        kprint("'\n");
     }
-    kprint("> "); // Mostrar el prompt para el siguiente comando
+    kprint("> ");
 }

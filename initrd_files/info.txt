@@ -1,0 +1,8 @@
+--- Informacion del Sistema ---
+Kernel: CarleyOS v0.4
+Arquitectura: x86_64
+Caracteristicas:
+- Multitarea Apropiativa
+- Gestion de Memoria (kmalloc)
+- Shell Interactiva
+- Puerto Serie para Depuracion
