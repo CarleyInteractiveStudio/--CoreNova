@@ -14,8 +14,8 @@ LDFLAGS = -T linker.ld
 QEMUFLAGS = -cdrom carleyos.iso -nographic
 
 # Archivos
-SOURCES_ASM = boot.s interrupts.s
-SOURCES_C = kernel.c idt.c timer.c keyboard.c shell.c pmm.c heap.c serial.c
+SOURCES_ASM = boot.s interrupts.s switch.s
+SOURCES_C = kernel.c idt.c timer.c keyboard.c shell.c pmm.c heap.c serial.c task.c
 OBJECTS_ASM = $(SOURCES_ASM:.s=.o)
 OBJECTS_C = $(SOURCES_C:.c=.o)
 KERNEL_BIN = carleyos.bin

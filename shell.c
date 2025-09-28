@@ -1,4 +1,5 @@
 #include "shell.h"
+#include "task.h"
 #include <stdint.h>
 
 // --- Declaraciones de funciones externas ---
@@ -43,8 +44,11 @@ void shell_handle_line(const char *input) {
         kprint("  clear - Limpia la pantalla\n");
         kprint("  echo  - Repite el texto que le sigue\n");
         kprint("  reboot - Reinicia el sistema\n");
+        kprint("  yield - Cede el control a otra tarea\n");
     } else if (strcmp(input, "clear") == 0) {
         screen_clear();
+    } else if (strcmp(input, "yield") == 0) {
+        schedule();
     } else if (strcmp(input, "reboot") == 0) {
         // Provocar una triple falta para reiniciar (método común en OS dev)
         asm volatile ("int $0x3");
