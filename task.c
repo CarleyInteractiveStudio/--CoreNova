@@ -1,47 +1,48 @@
 #include "task.h"
 #include "heap.h"
+#include "serial.h" // Para depuración
 #include <stddef.h>
+
+// --- Definiciones ---
+#define STACK_SIZE 4096
+
+// Estructura que coincide con los registros guardados por irq0_handler
+typedef struct {
+    uint64_t r15, r14, r13, r12, r11, r10, r9, r8;
+    uint64_t rbp, rdi, rsi, rdx, rcx, rbx, rax;
+} pushed_registers_t;
+
+// Estructura que coincide con lo que la CPU guarda en una interrupción
+typedef struct {
+    uint64_t rip;
+    uint64_t cs;
+    uint64_t rflags;
+    uint64_t rsp;
+    uint64_t ss;
+} interrupt_stack_frame_t;
+
 
 // --- Variables Globales ---
 static task_t *current_task = NULL;
 static task_t *task_list_head = NULL;
 static uint64_t next_task_id = 0;
 
-// --- Declaraciones Externas ---
-extern void context_switch(void **old_task_sp, void *new_task_sp);
-
 // --- Funciones Internas ---
-
-// Envoltorio para la ejecución de la tarea.
-// Llama a la función de entrada de la tarea actual y luego a task_exit.
-void task_wrapper() {
-    // Las interrupciones deben estar habilitadas para que el timer funcione,
-    // pero la función de cambio de contexto podría deshabilitarlas.
-    // Las re-habilitamos aquí para la nueva tarea.
-    asm volatile("sti");
-
-    current_task->entry_point();
-    task_exit();
-}
+void task_wrapper();
 
 // --- Implementación de la Interfaz Pública ---
 
 void task_init() {
     task_t *kernel_task = (task_t*)kmalloc(sizeof(task_t));
-    if (kernel_task == NULL) return;
-
     kernel_task->id = next_task_id++;
     kernel_task->state = TASK_RUNNING;
     kernel_task->stack_pointer = NULL;
     kernel_task->stack_base = NULL;
     kernel_task->entry_point = NULL;
-
     kernel_task->next = kernel_task;
     task_list_head = kernel_task;
     current_task = kernel_task;
 }
-
-#define STACK_SIZE 4096
 
 int task_create(void (*entry_point)()) {
     task_t *new_task = (task_t*)kmalloc(sizeof(task_t));
@@ -59,19 +60,21 @@ int task_create(void (*entry_point)()) {
     new_task->entry_point = entry_point;
 
     // Preparar la pila inicial de la nueva tarea
-    uint64_t *stack_top = (uint64_t*)((uint8_t*)stack + STACK_SIZE);
+    uint8_t *stack_top = (uint8_t*)stack + STACK_SIZE;
 
-    // 1. La "dirección de retorno" para context_switch -> la función task_wrapper.
-    *(--stack_top) = (uint64_t)task_wrapper;
+    // 1. Crear un marco de interrupción falso
+    stack_top -= sizeof(interrupt_stack_frame_t);
+    interrupt_stack_frame_t *frame = (interrupt_stack_frame_t*)stack_top;
+    frame->rip = (uint64_t)task_wrapper;
+    frame->cs = 0x08; // Segmento de código del kernel
+    frame->rflags = 0x202; // Habilitar interrupciones
+    frame->rsp = (uint64_t)stack_top;
+    frame->ss = 0x10; // Segmento de datos del kernel
 
-    // 2. Valores iniciales para los registros que context_switch restaura (r15 a rbp).
-    //    Los ponemos a 0, ya que la tarea empieza desde cero.
-    *(--stack_top) = 0; // r15
-    *(--stack_top) = 0; // r14
-    *(--stack_top) = 0; // r13
-    *(--stack_top) = 0; // r12
-    *(--stack_top) = 0; // rbx
-    *(--stack_top) = 0; // rbp
+    // 2. Poner los valores iniciales de los registros guardados por irq0_handler
+    stack_top -= sizeof(pushed_registers_t);
+    pushed_registers_t *regs = (pushed_registers_t*)stack_top;
+    for(int i=0; i<sizeof(pushed_registers_t)/8; i++) ((uint64_t*)regs)[i] = 0;
 
     new_task->stack_pointer = stack_top;
 
@@ -82,36 +85,49 @@ int task_create(void (*entry_point)()) {
     return new_task->id;
 }
 
-void schedule() {
-    if (current_task == NULL) return;
+void* schedule(void *current_sp) {
+    // 1. Guardar el puntero de la pila de la tarea que fue interrumpida.
+    current_task->stack_pointer = current_sp;
 
-    task_t *next_task = current_task->next;
-    // Bucle para encontrar la siguiente tarea que no esté terminada.
-    while (next_task->state == TASK_FINISHED) {
-        if (next_task == current_task) return; // No hay otras tareas que ejecutar.
+    // 2. Encontrar la siguiente tarea que esté lista para ejecutarse.
+    task_t *next_task = current_task;
+    do {
         next_task = next_task->next;
+        if (next_task->state == TASK_READY) {
+            break; // Encontramos una.
+        }
+    } while (next_task != current_task);
+
+    // 3. Si no encontramos otra tarea lista (o solo hay una), no hay cambio.
+    if (next_task == current_task || next_task->state != TASK_READY) {
+        return current_task->stack_pointer;
     }
 
-    // Si la siguiente tarea lista es la misma que la actual, no hacemos nada.
-    if (next_task == current_task) return;
-
+    // 4. Realizar el cambio de tarea.
     task_t *old_task = current_task;
 
+    // Marcar la tarea antigua como lista (si no es la del kernel que nunca se detiene).
     if (old_task->state == TASK_RUNNING) {
         old_task->state = TASK_READY;
     }
 
+    // Marcar la nueva tarea como en ejecución.
     next_task->state = TASK_RUNNING;
     current_task = next_task;
 
-    context_switch(&old_task->stack_pointer, next_task->stack_pointer);
+    // 5. Devolver el puntero de la pila de la nueva tarea al manejador de interrupción.
+    return current_task->stack_pointer;
+}
+
+void task_wrapper() {
+    current_task->entry_point();
+    task_exit();
 }
 
 void task_exit() {
     current_task->state = TASK_FINISHED;
-    // NOTA: No liberamos la pila aquí porque podríamos estar ejecutándonos en ella.
-    // Un sistema más complejo tendría una tarea "reaper" para limpiar las tareas terminadas.
-    schedule();
-    // No se debería llegar nunca a este punto.
-    for(;;);
+    // Bucle infinito, el planificador ya no seleccionará esta tarea.
+    for(;;) {
+        asm volatile("hlt");
+    }
 }

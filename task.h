@@ -29,8 +29,9 @@ void task_init();
 // Devuelve el ID de la nueva tarea o -1 si falla.
 int task_create(void (*entry_point)());
 
-// La función del planificador. Cambia a la siguiente tarea lista.
-void schedule();
+// El planificador. Guarda el estado de la tarea actual, elige la siguiente y devuelve su estado.
+// Es llamado desde la interrupción del temporizador.
+void* schedule(void *current_sp);
 
 // Termina la tarea actual.
 void task_exit();

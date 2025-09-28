@@ -74,7 +74,6 @@ void task_a_func() {
     kprint("\n[Tarea A iniciada]\n");
     for (;;) {
         kprint("A");
-        for (volatile int i = 0; i < 15000000; i++);
     }
 }
 
@@ -82,7 +81,6 @@ void task_b_func() {
     kprint("\n[Tarea B iniciada]\n");
     for (;;) {
         kprint("B");
-        for (volatile int i = 0; i < 15000000; i++);
     }
 }
 
@@ -111,7 +109,7 @@ void kmain(unsigned long magic, unsigned long addr) {
     task_create(task_b_func);
 
     kprint("\nInicializacion completa. Lanzando shell...\n");
-    kprint("Escribe 'yield' para cambiar de tarea.\n\n");
+    kprint("La multitarea apropiativa esta activa.\n\n");
 
     // Inicialización del resto de sistemas
     idt_init();
