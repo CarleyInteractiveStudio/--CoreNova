@@ -92,6 +92,8 @@ uintptr_t initrd_start = 0;
 void kmain(unsigned long magic, unsigned long addr) {
     serial_init();
     screen_clear();
+    idt_init();
+
     kprint("CarleyOS v0.3 - Multitarea\n");
 
     if (magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
@@ -135,7 +137,6 @@ void kmain(unsigned long magic, unsigned long addr) {
     kprint("La multitarea apropiativa esta activa.\n\n");
 
     // Inicialización del resto de sistemas
-    idt_init();
     timer_init(100);
     keyboard_init();
     keyboard_set_line_handler(shell_handle_line);

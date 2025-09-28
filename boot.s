@@ -22,6 +22,10 @@ pdpt:
     resb 4096
 pd0:
     resb 4096
+saved_multiboot_magic:
+    resd 1
+saved_multiboot_info:
+    resd 1
 stack_bottom:
     resb 16384 ; 16 KiB de pila
 stack_top:
@@ -40,9 +44,9 @@ _start:
     ; Configurar una pila temporal
     mov esp, stack_top
 
-    ; Guardar la información de Multiboot
-    push eax
-    push ebx
+    ; Guardar la información de Multiboot en memoria
+    mov [saved_multiboot_magic], eax
+    mov [saved_multiboot_info], ebx
 
     ; Configurar tablas de página para mapear la primera 1GiB
     ; PML4[0] -> PDPT
@@ -124,8 +128,8 @@ long_mode_start:
     mov rsp, stack_top
 
     ; Llamar al kernel en C
-    pop rsi ; Puntero a la info de Multiboot
-    pop rdi ; Mágico de Multiboot
+    mov edi, [saved_multiboot_magic]
+    mov esi, [saved_multiboot_info]
     call kmain
 
     ; Colgar si kmain retorna

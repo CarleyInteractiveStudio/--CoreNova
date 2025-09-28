@@ -11,7 +11,7 @@ QEMU = qemu-system-x86_64
 ASMFLAGS = -f elf64
 GCCFLAGS = -m64 -ffreestanding -O2 -Wall -Wextra -nostdlib -fno-pie -fno-stack-protector
 LDFLAGS = -T linker.ld
-QEMUFLAGS = -cdrom carleyos.iso -nographic
+QEMUFLAGS = -cdrom carleyos.iso -nographic -serial file:serial.log
 
 # Archivos
 SOURCES_ASM = boot.s interrupts.s
