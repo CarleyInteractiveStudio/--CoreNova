@@ -1,2 +1,1 @@
-# --CoreNova
-mi primer servidor 
+Core
