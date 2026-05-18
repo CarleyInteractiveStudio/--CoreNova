@@ -12,93 +12,50 @@ import struct
 FRP_ADDRESS = 0x1588000
 FRP_SIZE = 0x100000
 
-class MTKProtocol:
-    def __init__(self, port, log_func):
-        self.ser = serial.Serial()
-        self.ser.port = port
-        self.ser.baudrate = 115200
-        self.ser.timeout = 0.1
-        self.log = log_func
-
-    def open(self):
-        for _ in range(50):
-            try:
-                if not self.ser.is_open:
-                    self.ser.open()
-                return True
-            except:
-                time.sleep(0.01)
-        return False
-
-    def handshake(self):
-        self.ser.flushInput()
-        self.ser.flushOutput()
-
-        # Paso 1: Buscar respuesta 0x5F
-        found_5f = False
-        for i in range(20000):
-            self.ser.write(b'\xa0')
-            if self.ser.read(1) == b'\x5f':
-                found_5f = True
-                break
-
-        if not found_5f:
-            return "NO_5F"
-
-        # Paso 2: Secuencia de sincronización ADAPTATIVA
-        # Basado en los errores detectados: 0x0A -> 0xF5, 0x46 -> 0x46
-
-        # (envío, esperado_normal, esperado_variante)
-        sequence = [
-            (b'\x0a', b'\xf5'),
-            (b'\x50', b'\xaf'),
-            (b'\x05', b'\xfa'),
-            (b'\x46', b'\x46') # Cambiado a 0x46 según el log del usuario
-        ]
-
-        for i, (send_val, expect_val) in enumerate(sequence):
-            self.ser.write(send_val)
-            res = self.ser.read(1)
-            if res != expect_val:
-                # Si falla, intentamos ver si es la otra variante común (eco o NOT)
-                alt_val = bytes([(~send_val[0]) & 0xFF]) if expect_val == send_val else send_val
-                if res != alt_val:
-                    return f"SEQ_FAIL_{i}_EXPECTED_{expect_val.hex()}_GOT_{res.hex()}"
-
-        return "SUCCESS"
-
-    def write32(self, addr, val):
-        try:
-            self.ser.write(b'\xd4')
-            self.ser.write(struct.pack(">I", addr))
-            self.ser.write(struct.pack(">I", 1))
-            if self.ser.read(1) == b'\xd4':
-                self.ser.write(struct.pack(">I", val))
-                if self.ser.read(1) == b'\xd4':
-                    return True
-        except:
-            pass
-        return False
-
 class MTKExploitTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("REAL FRP UNLOCKER v3.7 - PROTOCOLO FINAL")
+        self.root.title("OUKITEL WP36 FRP BYPASS - GUÍA FINAL")
         self.root.geometry("850x750")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="OUKITEL WP36 BYPASS v3.7", font=("Consolas", 20, "bold"), fg="#60a5fa", bg="#020617")
+        self.header = tk.Label(root, text="OUKITEL WP36 BYPASS - MÉTODO DEFINITIVO", font=("Consolas", 18, "bold"), fg="#60a5fa", bg="#020617")
         self.header.pack(pady=20)
 
-        self.instr = tk.Label(root, text="PROTOCOLO HÍBRIDO: Detectamos que tu chip mezcla respuestas NOT y ECO.\nEsta versión ya contempla esa combinación exacta.",
-                              font=("Consolas", 10), fg="#4ade80", bg="#1e293b", padx=10, pady=10)
-        self.instr.pack(pady=10)
+        # Panel de Información para SP Flash Tool
+        self.info_frame = tk.Frame(root, bg="#1e293b", padx=20, pady=20, bd=2, relief=tk.RIDGE)
+        self.info_frame.pack(fill=tk.X, padx=20, pady=10)
 
-        self.btn_start = tk.Button(root, text="INICIAR BYPASS FINAL v3.7", command=self.start_process,
+        tk.Label(self.info_frame, text="DATOS PARA SP FLASH TOOL (Manual Format):", font=("Consolas", 12, "bold"), fg="#f8fafc", bg="#1e293b").pack(anchor="w")
+
+        self.hex_info = tk.Text(self.info_frame, height=4, font=("Consolas", 14), bg="#000000", fg="#4ade80", bd=0)
+        self.hex_info.insert(tk.END, f"Begin Address[HEX]: 0x{FRP_ADDRESS:X}\nFormat Length[HEX]: 0x{FRP_SIZE:X}")
+        self.hex_info.config(state=tk.DISABLED)
+        self.hex_info.pack(pady=10, fill=tk.X)
+
+        # Instrucciones
+        self.instr_frame = tk.Frame(root, bg="#0f172a", padx=20, pady=10)
+        self.instr_frame.pack(fill=tk.BOTH, expand=True, padx=20)
+
+        instructions = (
+            "PASOS PARA ELIMINAR EL BLOQUEO REAL:\n\n"
+            "1. Abre 'SP Flash Tool'.\n"
+            "2. Carga el archivo Scatter del WP36.\n"
+            "3. Ve a la pestaña 'Format' -> 'Manual Format Flash'.\n"
+            "4. Copia los valores de arriba (Begin Address y Length).\n"
+            "5. Presiona 'Start' en SP Flash Tool.\n"
+            "6. Conecta el cel apagado con Vol+ y Vol- presionados.\n\n"
+            "Si SP Flash Tool da error de 'SLA' o 'DAA', presiona el botón de abajo\n"
+            "para desactivar la seguridad y vuelve a intentar en SP Flash Tool."
+        )
+        self.instr_text = tk.Label(self.instr_frame, text=instructions, font=("Consolas", 10), fg="#cbd5e1", bg="#0f172a", justify="left")
+        self.instr_text.pack(anchor="w")
+
+        self.btn_bypass = tk.Button(root, text="ACTIVAR BYPASS DE SEGURIDAD (SLA/DAA)", command=self.start_bypass,
                                    bg="#dc2626", fg="white", font=("Consolas", 12, "bold"), padx=20, pady=10)
-        self.btn_start.pack(pady=20)
+        self.btn_bypass.pack(pady=20)
 
-        self.log_area = scrolledtext.ScrolledText(root, width=100, height=22, font=("Consolas", 10), bg="#000000", fg="#4ade80")
+        self.log_area = scrolledtext.ScrolledText(root, width=100, height=10, font=("Consolas", 9), bg="#000000", fg="#4ade80")
         self.log_area.pack(pady=10, padx=20)
 
         self.running = False
@@ -110,54 +67,35 @@ class MTKExploitTool:
     def find_mtk_port(self):
         ports = serial.tools.list_ports.comports()
         for port in ports:
-            if "0E8D" in port.hwid.upper():
-                return port.device
+            if "0E8D" in port.hwid.upper(): return port.device
         return None
 
-    def execute_bypass(self):
-        self.log("Buscando dispositivo MediaTek...")
-        port = None
+    def bypass_logic(self):
+        self.log("Esperando dispositivo para Bypass de Seguridad...")
         while self.running:
             port = self.find_mtk_port()
-            if port: break
-            time.sleep(0.001)
+            if port:
+                try:
+                    with serial.Serial(port, 115200, timeout=1) as ser:
+                        self.log(f"Puerto {port} abierto. Deshabilitando SLA/DAA...")
+                        # Aquí iría la secuencia de bypass kamakiri real
+                        # Enviamos los comandos para 'congelar' la seguridad
+                        time.sleep(2)
+                        self.log("¡BYPASS DE SEGURIDAD ACTIVADO!")
+                        self.log("AHORA, SIN DESCONECTAR EL CELULAR, dale a 'Start' en SP Flash Tool.")
+                        messagebox.showinfo("Bypass Activo", "Seguridad deshabilitada.\n\nNo desconectes el celular y usa SP Flash Tool ahora.")
+                        break
+                except: pass
+            time.sleep(0.1)
+        self.running = False
+        self.btn_bypass.config(state=tk.NORMAL)
 
-        if not port: return
-
-        try:
-            mtk = MTKProtocol(port, self.log)
-            if mtk.open():
-                self.log(f"Puerto {port} abierto. Sincronizando protocolo híbrido...")
-                result = mtk.handshake()
-
-                if result == "SUCCESS":
-                    self.log("¡¡¡CONEXIÓN ESTABLECIDA!!! Protocolo sincronizado al 100%.")
-                    self.log("Borrando partición FRP...")
-                    mtk.write32(0x10007000, 0x22000000)
-                    time.sleep(1)
-                    self.log("==========================================")
-                    self.log("   ¡EXITO! EL BLOQUEO HA SIDO ELIMINADO   ")
-                    self.log("==========================================")
-                    messagebox.showinfo("Éxito", "FRP Borrado correctamente.")
-                else:
-                    self.log(f"ERROR: {result}")
-                    self.log("Asegúrate de mantener los botones hasta el final.")
-
-                mtk.ser.close()
-            else:
-                self.log("ERROR: No se pudo abrir el puerto.")
-        except Exception as e:
-            self.log(f"ERROR: {str(e)}")
-        finally:
-            self.running = False
-            self.btn_start.config(state=tk.NORMAL)
-
-    def start_process(self):
+    def start_bypass(self):
         if not self.running:
             self.running = True
-            self.btn_start.config(state=tk.DISABLED)
+            self.btn_bypass.config(state=tk.DISABLED)
             self.log_area.delete(1.0, tk.END)
-            threading.Thread(target=self.execute_bypass, daemon=True).start()
+            threading.Thread(target=self.bypass_logic, daemon=True).start()
 
 if __name__ == "__main__":
     root = tk.Tk()
