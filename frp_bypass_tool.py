@@ -13,15 +13,15 @@ FRP_SIZE = 0x100000
 class OukitelDefinitiveTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("OUKITEL WP36 BYPASS - DIAGNOSTICO V3.1")
+        self.root.title("OUKITEL WP36 BYPASS - FINAL V3.7 (PROTOCOLO HIBRIDO)")
         self.root.geometry("850x750")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="MODO DIAGNÓSTICO DE PUERTO", font=("Consolas", 18, "bold"), fg="#38bdf8", bg="#020617")
+        self.header = tk.Label(root, text="BYPASS FINAL v3.7 - OUKITEL WP36", font=("Consolas", 18, "bold"), fg="#facc15", bg="#020617")
         self.header.pack(pady=15)
 
-        self.btn_run = tk.Button(root, text="INICIAR ESCANEO", command=self.start_process,
-                                bg="#2563eb", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
+        self.btn_run = tk.Button(root, text="INICIAR BYPASS FINAL v3.7", command=self.start_process,
+                                bg="#ca8a04", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
         self.btn_run.pack(pady=15)
 
         self.log_area = scrolledtext.ScrolledText(root, width=95, height=25, font=("Consolas", 9), bg="#000000", fg="#4ade80")
@@ -39,61 +39,78 @@ class OukitelDefinitiveTool:
                 return p.device
         return None
 
-    def handshake_debug(self, ser):
-        self.log(f"--- Iniciando Handshake en {ser.port} ---")
-        ser.timeout = 0.05
+    def handshake_hybrid(self, ser):
+        self.log("Probando secuencia de Protocolo Híbrido (Revision B)...")
+        ser.timeout = 0.1
         ser.reset_input_buffer()
 
         start_time = time.time()
-        while time.time() - start_time < 15:
+        while time.time() - start_time < 20:
+            # Primero intentamos el trigger estándar
             ser.write(b'\xA0')
             res = ser.read(1)
-            if res:
-                self.log(f"Recibido: 0x{res.hex().upper()}")
-                if res == b'\x5A':
-                    self.log("¡SINCRO 0x5A DETECTADA!")
-                    return True
-                elif res == b'\xA0':
-                    self.log("Eco detectado (el celular no está procesando comandos).")
-            time.sleep(0.01)
+
+            if res == b'\x5A':
+                self.log("Handshake Estándar (0x5A) Detectado.")
+                # Sincro estándar
+                for cmd in [b'\xA1', b'\xA2', b'\xA3', b'\xA4']:
+                    ser.write(cmd)
+                    ser.read(1)
+                return True
+
+            # Si no, intentamos la secuencia híbrida detectada
+            # 0x0A -> 0xF5, 0x50 -> 0xAF, 0x05 -> 0xFA, 0x46 -> 0x46
+            self.log("Intentando secuencia híbrida (0x0A -> 0xF5)...")
+            ser.write(b'\x0A')
+            if ser.read(1) == b'\xF5':
+                self.log("Paso 1 OK (0xF5)")
+                ser.write(b'\x50')
+                if ser.read(1) == b'\xAF':
+                    self.log("Paso 2 OK (0xAF)")
+                    ser.write(b'\x05')
+                    if ser.read(1) == b'\xFA':
+                        self.log("Paso 3 OK (0xFA)")
+                        ser.write(b'\x46')
+                        if ser.read(1) == b'\x46':
+                            self.log("¡HANDSHAKE HIBRIDO COMPLETADO!")
+                            return True
+
+            time.sleep(0.5)
         return False
 
     def process_logic(self):
         self.running = True
         self.btn_run.config(state=tk.DISABLED)
         self.log_area.delete(1.0, tk.END)
-        self.log("Buscando dispositivo...")
+        self.log("ESPERANDO DISPOSITIVO EN MODO BROM...")
+        self.log("(Manten VOL+ y VOL- presionados y conecta el cable)")
 
-        last_port = None
+        port = None
         while self.running:
             port = self.find_mtk_port()
-            if port and port != last_port:
-                self.log(f"¡Dispositivo encontrado en {port}!")
-                last_port = port
+            if port:
+                self.log(f"Puerto detectado: {port}")
                 try:
                     with serial.Serial(port, 115200, timeout=1) as ser:
-                        if self.handshake_debug(ser):
-                            self.log("Handshake exitoso. Continuando...")
-                            # Intentar leer el ID del chip para confirmar
-                            ser.write(b'\xFD')
-                            id_res = ser.read(5)
-                            self.log(f"Chip ID Data: {id_res.hex().upper()}")
-
-                            # Intentar borrado
+                        if self.handshake_hybrid(ser):
+                            self.log("Bypass Activo. Eliminando cuenta Google...")
+                            # Comando de borrado directo
                             ser.write(b'\x71')
                             if ser.read(1) == b'\x71':
                                 ser.write(struct.pack(">I", FRP_START_ADDRESS))
                                 ser.write(struct.pack(">I", FRP_START_ADDRESS + FRP_SIZE))
                                 if ser.read(2) == b'\x00\x00':
-                                    self.log("¡BORRADO FRP COMPLETADO!")
-                                    messagebox.showinfo("OK", "¡EXITO!")
+                                    self.log("¡LIBERACION EXITOSA! Bloqueo eliminado.")
+                                    messagebox.showinfo("EXITO", "¡Cuenta eliminada!\n\nYa puedes encender el celular.")
                                     break
+                                else:
+                                    self.log("Fallo en la escritura. Seguridad SLA persistente.")
                             else:
-                                self.log("Seguridad SLA activa. Acceso denegado.")
+                                self.log("Acceso denegado. Se requiere exploit adicional.")
                         else:
-                            self.log("No hubo respuesta 0x5A. ¿Zadig instalado?")
+                            self.log("No se pudo sincronizar. Reintenta.")
                 except Exception as e:
-                    self.log(f"Error al abrir puerto: {str(e)}")
+                    self.log(f"Error: {str(e)}")
             time.sleep(0.1)
 
         self.running = False
