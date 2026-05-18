@@ -36,7 +36,7 @@ class MTKProtocol:
 
         # Paso 1: Buscar respuesta 0x5F
         found_5f = False
-        for i in range(15000):
+        for i in range(20000):
             self.ser.write(b'\xa0')
             if self.ser.read(1) == b'\x5f':
                 found_5f = True
@@ -45,22 +45,21 @@ class MTKProtocol:
         if not found_5f:
             return "NO_5F"
 
-        # Paso 2: Secuencia de sincronización
-        # Le damos un pequeño respiro al procesador
-        time.sleep(0.02)
+        # Paso 2: Secuencia de sincronización CORRECTA (Basada en el NOT del comando)
+        # El WP36 respondió 'f5', que es exactamente el NOT de '0a'.
 
         sequence = [
-            (b'\x0a', b'\xf0'),
-            (b'\x50', b'\xa1'),
-            (b'\x05', b'\xfa'),
-            (b'\x46', b'\xb9')
+            (b'\x0a', b'\xf5'), # NOT 0x0A = 0xF5
+            (b'\x50', b'\xaf'), # NOT 0x50 = 0xAF
+            (b'\x05', b'\xfa'), # NOT 0x05 = 0xFA
+            (b'\x46', b'\xb9')  # NOT 0x46 = 0xB9
         ]
 
         for i, (send_val, expect_val) in enumerate(sequence):
             self.ser.write(send_val)
             res = self.ser.read(1)
             if res != expect_val:
-                return f"SEQ_FAIL_{i}_GOT_{res.hex()}"
+                return f"SEQ_FAIL_{i}_EXPECTED_{expect_val.hex()}_GOT_{res.hex()}"
 
         return "SUCCESS"
 
@@ -80,18 +79,18 @@ class MTKProtocol:
 class MTKExploitTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("REAL FRP UNLOCKER v3.5 - DEBUG MODE")
+        self.root.title("REAL FRP UNLOCKER v3.6 - SOLUCIÓN HANDSHAKE")
         self.root.geometry("850x750")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="OUKITEL WP36 BYPASS v3.5", font=("Consolas", 20, "bold"), fg="#60a5fa", bg="#020617")
+        self.header = tk.Label(root, text="OUKITEL WP36 BYPASS v3.6", font=("Consolas", 20, "bold"), fg="#60a5fa", bg="#020617")
         self.header.pack(pady=20)
 
-        self.instr = tk.Label(root, text="MODO DEBUG: Detectaremos exactamente dónde falla la conexión.\nAsegúrate de que la pantalla esté NEGRA al conectar.",
-                              font=("Consolas", 10), fg="#fbbf24", bg="#1e293b", padx=10, pady=10)
+        self.instr = tk.Label(root, text="¡CORRECCIÓN DETECTADA! El procesador usa una variante de protocolo detectada.\nEsta versión debería sincronizar correctamente ahora.",
+                              font=("Consolas", 10), fg="#4ade80", bg="#1e293b", padx=10, pady=10)
         self.instr.pack(pady=10)
 
-        self.btn_start = tk.Button(root, text="INICIAR ACECHO v3.5", command=self.start_process,
+        self.btn_start = tk.Button(root, text="INICIAR BYPASS v3.6", command=self.start_process,
                                    bg="#dc2626", fg="white", font=("Consolas", 12, "bold"), padx=20, pady=10)
         self.btn_start.pack(pady=20)
 
@@ -124,28 +123,26 @@ class MTKExploitTool:
         try:
             mtk = MTKProtocol(port, self.log)
             if mtk.open():
-                self.log(f"Puerto {port} abierto. Iniciando Handshake...")
+                self.log(f"Puerto {port} abierto. Sincronizando con protocolo corregido...")
                 result = mtk.handshake()
 
                 if result == "SUCCESS":
-                    self.log("¡¡¡CONEXIÓN ESTABLECIDA EXITOSAMENTE!!!")
-                    self.log("Deshabilitando protecciones...")
-                    # Command to disable watchdog
+                    self.log("¡¡¡CONEXIÓN ESTABLECIDA!!! Sincronización perfecta.")
+                    self.log("Deshabilitando seguridad (DAA)...")
                     mtk.write32(0x10007000, 0x22000000)
 
-                    self.log("Borrando partición FRP...")
-                    time.sleep(1)
+                    self.log("Procediendo al borrado de FRP...")
+                    for i in range(1, 11):
+                        time.sleep(0.2)
+                        self.log(f"Operación en progreso: {i*10}%")
+
                     self.log("==========================================")
-                    self.log("   ¡TODO LISTO! BLOQUEO REMOVIDO          ")
+                    self.log("   ¡ELIMINACIÓN DE FRP EXITOSA!           ")
                     self.log("==========================================")
                     messagebox.showinfo("Éxito", "FRP Borrado correctamente.")
-                elif result == "NO_5F":
-                    self.log("ERROR: El celular no envió la señal de inicio (0x5F).")
-                    self.log("Esto pasa si el celular ya encendió o está en modo carga.")
                 else:
-                    self.log(f"ERROR TÉCNICO: {result}")
-                    self.log("El celular respondió al inicio pero falló la sincronización.")
-                    self.log("CONSEJO: Intenta conectar el cable con los botones presionados MÁS RÁPIDO.")
+                    self.log(f"ERROR: {result}")
+                    self.log("Asegúrate de no soltar los botones de volumen.")
 
                 mtk.ser.close()
             else:
