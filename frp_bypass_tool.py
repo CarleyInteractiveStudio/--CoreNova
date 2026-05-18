@@ -10,24 +10,18 @@ import threading
 FRP_START_ADDRESS = 0x1588000
 FRP_SIZE = 0x100000
 
-CMD_GET_HW_CODE = b'\xFD'
-CMD_ERASE = b'\x71'
-
 class OukitelDefinitiveTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("OUKITEL WP36 FRP BYPASS - V2.2 (MODO AGRESIVO)")
+        self.root.title("OUKITEL WP36 BYPASS - ULTRA BYPASS V3.0")
         self.root.geometry("850x750")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="MTK BYPASS ENGINE - WP36", font=("Consolas", 18, "bold"), fg="#38bdf8", bg="#020617")
+        self.header = tk.Label(root, text="MTK ULTRA BYPASS - SIN TIMEOUTS", font=("Consolas", 18, "bold"), fg="#f43f5e", bg="#020617")
         self.header.pack(pady=15)
 
-        self.status_label = tk.Label(root, text="ESTADO: LISTO", font=("Consolas", 12), fg="#4ade80", bg="#020617")
-        self.status_label.pack()
-
-        self.btn_run = tk.Button(root, text="INICIAR PROCESO", command=self.start_process,
-                                bg="#2563eb", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
+        self.btn_run = tk.Button(root, text="ACTIVAR MODO ULTRA (RAFAGA)", command=self.start_process,
+                                bg="#e11d48", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
         self.btn_run.pack(pady=15)
 
         self.log_area = scrolledtext.ScrolledText(root, width=95, height=25, font=("Consolas", 9), bg="#000000", fg="#4ade80")
@@ -46,74 +40,59 @@ class OukitelDefinitiveTool:
         return None
 
     def handshake(self, ser):
-        self.log("Enviando señales de sincronización (0xA0)...")
-        ser.timeout = 0.001 # Muy rápido para no perder el timing
-        start_time = time.time()
+        self.log("ENVIANDO RÁFAGA DE SINCRONIZACIÓN...")
+        ser.timeout = 0.001 # El secreto está aquí
+        ser.reset_input_buffer()
 
-        while time.time() - start_time < 20:
+        # Enviamos ráfagas de 0xA0
+        for _ in range(500):
             ser.write(b'\xA0')
             res = ser.read(1)
-
-            if res:
-                self.log(f"Respuesta recibida: {res.hex().upper()}")
-                if res == b'\x5A':
-                    self.log("¡Sincronización confirmada!")
-                    # Secuencia extendida
-                    for cmd in [b'\xA1', b'\xA2', b'\xA3', b'\xA4']:
-                        ser.write(cmd)
-                        time.sleep(0.01)
-                        ser.read(1)
-                    return True
-                elif res in [b'\xF5', b'\x46', b'\xA0']:
-                    self.log("Intentando forzar entrada...")
-                    ser.write(b'\xA0')
-
-            # Pequeño delay para no saturar el buffer
-            time.sleep(0.001)
+            if res == b'\x5A':
+                self.log("¡HANDSHAKE ATRAPADO!")
+                # Completar handshake
+                for cmd in [b'\xA1', b'\xA2', b'\xA3', b'\xA4']:
+                    ser.write(cmd)
+                    ser.read(1)
+                return True
         return False
 
     def process_logic(self):
         self.running = True
         self.btn_run.config(state=tk.DISABLED)
         self.log_area.delete(1.0, tk.END)
-        self.log("CONECTA AHORA: Apaga el cel y mantén VOL+ y VOL-.")
+        self.log("LISTO PARA ATRAPAR EL PUERTO...")
+        self.log("Paso 1: Ten el cel desconectado y APAGADO.")
+        self.log("Paso 2: Presiona VOL+ y VOL- sin soltar.")
+        self.log("Paso 3: Conecta el cable USB.")
 
         port = None
         while self.running:
             port = self.find_mtk_port()
-            if port: break
-            time.sleep(0.1)
-
-        if not port: return
-
-        try:
-            self.log(f"Puerto detectado: {port}. Abriendo...")
-            with serial.Serial(port, 115200, timeout=1) as ser:
-                if self.handshake(ser):
-                    # Leer HW Code
-                    ser.write(CMD_GET_HW_CODE)
-                    ser.read(1) # skip cmd echo
-                    ser.read(2) # skip status
-                    hw_code = ser.read(2)
-                    if hw_code:
-                        self.log(f"Chip ID: MT{hw_code.hex().upper()}")
-
-                    self.log("Intentando borrado de seguridad...")
-                    ser.write(CMD_ERASE)
-                    if ser.read(1) == CMD_ERASE:
-                        ser.write(struct.pack(">I", FRP_START_ADDRESS))
-                        ser.write(struct.pack(">I", FRP_START_ADDRESS + FRP_SIZE))
-                        if ser.read(2) == b'\x00\x00':
-                            self.log("¡EXITO TOTAL! FRP ELIMINADO.")
-                            messagebox.showinfo("OK", "¡PROCESO COMPLETADO!")
+            if port:
+                self.log(f"¡PUERTO DETECTADO! {port}")
+                try:
+                    # Apertura ultra-rápida
+                    ser = serial.Serial(port, 115200, timeout=0.001)
+                    if self.handshake(ser):
+                        self.log("Bypass activo. Intentando borrar bloqueo...")
+                        ser.timeout = 1
+                        ser.write(b'\x71')
+                        if ser.read(1) == b'\x71':
+                            ser.write(struct.pack(">I", FRP_START_ADDRESS))
+                            ser.write(struct.pack(">I", FRP_START_ADDRESS + FRP_SIZE))
+                            if ser.read(2) == b'\x00\x00':
+                                self.log("¡EXITO TOTAL!")
+                                messagebox.showinfo("COMPLETO", "Bloqueo eliminado.")
+                            else: self.log("Error de escritura.")
                         else:
-                            self.log("Error en la escritura final.")
-                    else:
-                        self.log("Seguridad activa. Usa SP Flash Tool ahora que el puerto está abierto.")
-                else:
-                    self.log("No se pudo sincronizar. Reintenta conectando el cable más rápido.")
-        except Exception as e:
-            self.log(f"ERROR: {str(e)}")
+                            self.log("SEGURIDAD ACTIVA. USA SP FLASH TOOL AHORA.")
+                        ser.close()
+                        break
+                    ser.close()
+                except:
+                    pass
+            time.sleep(0.01)
 
         self.running = False
         self.btn_run.config(state=tk.NORMAL)
