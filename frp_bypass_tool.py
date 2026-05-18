@@ -13,15 +13,15 @@ FRP_SIZE = 0x100000
 class OukitelDefinitiveTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("OUKITEL WP36 BYPASS - ULTRA BYPASS V3.0")
+        self.root.title("OUKITEL WP36 BYPASS - DIAGNOSTICO V3.1")
         self.root.geometry("850x750")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="MTK ULTRA BYPASS - SIN TIMEOUTS", font=("Consolas", 18, "bold"), fg="#f43f5e", bg="#020617")
+        self.header = tk.Label(root, text="MODO DIAGNÓSTICO DE PUERTO", font=("Consolas", 18, "bold"), fg="#38bdf8", bg="#020617")
         self.header.pack(pady=15)
 
-        self.btn_run = tk.Button(root, text="ACTIVAR MODO ULTRA (RAFAGA)", command=self.start_process,
-                                bg="#e11d48", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
+        self.btn_run = tk.Button(root, text="INICIAR ESCANEO", command=self.start_process,
+                                bg="#2563eb", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
         self.btn_run.pack(pady=15)
 
         self.log_area = scrolledtext.ScrolledText(root, width=95, height=25, font=("Consolas", 9), bg="#000000", fg="#4ade80")
@@ -39,60 +39,62 @@ class OukitelDefinitiveTool:
                 return p.device
         return None
 
-    def handshake(self, ser):
-        self.log("ENVIANDO RÁFAGA DE SINCRONIZACIÓN...")
-        ser.timeout = 0.001 # El secreto está aquí
+    def handshake_debug(self, ser):
+        self.log(f"--- Iniciando Handshake en {ser.port} ---")
+        ser.timeout = 0.05
         ser.reset_input_buffer()
 
-        # Enviamos ráfagas de 0xA0
-        for _ in range(500):
+        start_time = time.time()
+        while time.time() - start_time < 15:
             ser.write(b'\xA0')
             res = ser.read(1)
-            if res == b'\x5A':
-                self.log("¡HANDSHAKE ATRAPADO!")
-                # Completar handshake
-                for cmd in [b'\xA1', b'\xA2', b'\xA3', b'\xA4']:
-                    ser.write(cmd)
-                    ser.read(1)
-                return True
+            if res:
+                self.log(f"Recibido: 0x{res.hex().upper()}")
+                if res == b'\x5A':
+                    self.log("¡SINCRO 0x5A DETECTADA!")
+                    return True
+                elif res == b'\xA0':
+                    self.log("Eco detectado (el celular no está procesando comandos).")
+            time.sleep(0.01)
         return False
 
     def process_logic(self):
         self.running = True
         self.btn_run.config(state=tk.DISABLED)
         self.log_area.delete(1.0, tk.END)
-        self.log("LISTO PARA ATRAPAR EL PUERTO...")
-        self.log("Paso 1: Ten el cel desconectado y APAGADO.")
-        self.log("Paso 2: Presiona VOL+ y VOL- sin soltar.")
-        self.log("Paso 3: Conecta el cable USB.")
+        self.log("Buscando dispositivo...")
 
-        port = None
+        last_port = None
         while self.running:
             port = self.find_mtk_port()
-            if port:
-                self.log(f"¡PUERTO DETECTADO! {port}")
+            if port and port != last_port:
+                self.log(f"¡Dispositivo encontrado en {port}!")
+                last_port = port
                 try:
-                    # Apertura ultra-rápida
-                    ser = serial.Serial(port, 115200, timeout=0.001)
-                    if self.handshake(ser):
-                        self.log("Bypass activo. Intentando borrar bloqueo...")
-                        ser.timeout = 1
-                        ser.write(b'\x71')
-                        if ser.read(1) == b'\x71':
-                            ser.write(struct.pack(">I", FRP_START_ADDRESS))
-                            ser.write(struct.pack(">I", FRP_START_ADDRESS + FRP_SIZE))
-                            if ser.read(2) == b'\x00\x00':
-                                self.log("¡EXITO TOTAL!")
-                                messagebox.showinfo("COMPLETO", "Bloqueo eliminado.")
-                            else: self.log("Error de escritura.")
+                    with serial.Serial(port, 115200, timeout=1) as ser:
+                        if self.handshake_debug(ser):
+                            self.log("Handshake exitoso. Continuando...")
+                            # Intentar leer el ID del chip para confirmar
+                            ser.write(b'\xFD')
+                            id_res = ser.read(5)
+                            self.log(f"Chip ID Data: {id_res.hex().upper()}")
+
+                            # Intentar borrado
+                            ser.write(b'\x71')
+                            if ser.read(1) == b'\x71':
+                                ser.write(struct.pack(">I", FRP_START_ADDRESS))
+                                ser.write(struct.pack(">I", FRP_START_ADDRESS + FRP_SIZE))
+                                if ser.read(2) == b'\x00\x00':
+                                    self.log("¡BORRADO FRP COMPLETADO!")
+                                    messagebox.showinfo("OK", "¡EXITO!")
+                                    break
+                            else:
+                                self.log("Seguridad SLA activa. Acceso denegado.")
                         else:
-                            self.log("SEGURIDAD ACTIVA. USA SP FLASH TOOL AHORA.")
-                        ser.close()
-                        break
-                    ser.close()
-                except:
-                    pass
-            time.sleep(0.01)
+                            self.log("No hubo respuesta 0x5A. ¿Zadig instalado?")
+                except Exception as e:
+                    self.log(f"Error al abrir puerto: {str(e)}")
+            time.sleep(0.1)
 
         self.running = False
         self.btn_run.config(state=tk.NORMAL)
