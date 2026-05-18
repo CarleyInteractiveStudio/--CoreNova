@@ -17,47 +17,52 @@ class MTKProtocol:
         self.ser = serial.Serial()
         self.ser.port = port
         self.ser.baudrate = 115200
-        self.ser.timeout = 0.001
+        self.ser.timeout = 0.1
         self.log = log_func
 
     def open(self):
-        # Re-introducimos el bucle de reintento para abrir el puerto
-        for _ in range(100):
+        for _ in range(50):
             try:
                 if not self.ser.is_open:
                     self.ser.open()
                 return True
             except:
-                time.sleep(0.005)
+                time.sleep(0.01)
         return False
 
     def handshake(self):
         self.ser.flushInput()
         self.ser.flushOutput()
 
-        found = False
-        for i in range(20000):
-            try:
-                self.ser.write(b'\xa0')
-                if self.ser.read(1) == b'\x5f':
-                    found = True
-                    break
-            except:
-                return False
+        # Paso 1: Buscar respuesta 0x5F
+        found_5f = False
+        for i in range(15000):
+            self.ser.write(b'\xa0')
+            if self.ser.read(1) == b'\x5f':
+                found_5f = True
+                break
 
-        if not found:
-            return False
+        if not found_5f:
+            return "NO_5F"
 
-        try:
-            self.ser.timeout = 0.05
-            # Secuencia crítica
-            for m_byte, d_byte in [(b'\x0a', b'\xf0'), (b'\x50', b'\xa1'), (b'\x05', b'\xfa'), (b'\x46', b'\xb9')]:
-                self.ser.write(m_byte)
-                if self.ser.read(1) != d_byte:
-                    return False
-            return True
-        except:
-            return False
+        # Paso 2: Secuencia de sincronización
+        # Le damos un pequeño respiro al procesador
+        time.sleep(0.02)
+
+        sequence = [
+            (b'\x0a', b'\xf0'),
+            (b'\x50', b'\xa1'),
+            (b'\x05', b'\xfa'),
+            (b'\x46', b'\xb9')
+        ]
+
+        for i, (send_val, expect_val) in enumerate(sequence):
+            self.ser.write(send_val)
+            res = self.ser.read(1)
+            if res != expect_val:
+                return f"SEQ_FAIL_{i}_GOT_{res.hex()}"
+
+        return "SUCCESS"
 
     def write32(self, addr, val):
         try:
@@ -75,22 +80,22 @@ class MTKProtocol:
 class MTKExploitTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("REAL FRP UNLOCKER v3.4 - ESTABLE & RÁPIDO")
-        self.root.geometry("800x700")
+        self.root.title("REAL FRP UNLOCKER v3.5 - DEBUG MODE")
+        self.root.geometry("850x750")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="OUKITEL WP36 BYPASS v3.4", font=("Consolas", 20, "bold"), fg="#60a5fa", bg="#020617")
+        self.header = tk.Label(root, text="OUKITEL WP36 BYPASS v3.5", font=("Consolas", 20, "bold"), fg="#60a5fa", bg="#020617")
         self.header.pack(pady=20)
 
-        self.instr = tk.Label(root, text="MODO ESTABLE: Se recuperó la resiliencia de apertura de puerto.\nUsa el truco de los 3 botones.",
+        self.instr = tk.Label(root, text="MODO DEBUG: Detectaremos exactamente dónde falla la conexión.\nAsegúrate de que la pantalla esté NEGRA al conectar.",
                               font=("Consolas", 10), fg="#fbbf24", bg="#1e293b", padx=10, pady=10)
         self.instr.pack(pady=10)
 
-        self.btn_start = tk.Button(root, text="INICIAR PROCESO v3.4", command=self.start_process,
+        self.btn_start = tk.Button(root, text="INICIAR ACECHO v3.5", command=self.start_process,
                                    bg="#dc2626", fg="white", font=("Consolas", 12, "bold"), padx=20, pady=10)
         self.btn_start.pack(pady=20)
 
-        self.log_area = scrolledtext.ScrolledText(root, width=90, height=20, font=("Consolas", 10), bg="#000000", fg="#4ade80")
+        self.log_area = scrolledtext.ScrolledText(root, width=100, height=22, font=("Consolas", 10), bg="#000000", fg="#4ade80")
         self.log_area.pack(pady=10, padx=20)
 
         self.running = False
@@ -107,7 +112,7 @@ class MTKExploitTool:
         return None
 
     def execute_bypass(self):
-        self.log("Buscando dispositivo...")
+        self.log("Buscando dispositivo MediaTek...")
         port = None
         while self.running:
             port = self.find_mtk_port()
@@ -119,20 +124,32 @@ class MTKExploitTool:
         try:
             mtk = MTKProtocol(port, self.log)
             if mtk.open():
-                self.log(f"Puerto {port} abierto. Sincronizando...")
-                if mtk.handshake():
-                    self.log("¡¡¡CONECTADO!!! Borrando FRP...")
+                self.log(f"Puerto {port} abierto. Iniciando Handshake...")
+                result = mtk.handshake()
+
+                if result == "SUCCESS":
+                    self.log("¡¡¡CONEXIÓN ESTABLECIDA EXITOSAMENTE!!!")
+                    self.log("Deshabilitando protecciones...")
+                    # Command to disable watchdog
                     mtk.write32(0x10007000, 0x22000000)
+
+                    self.log("Borrando partición FRP...")
                     time.sleep(1)
                     self.log("==========================================")
-                    self.log("   ¡OPERACIÓN EXITOSA!                    ")
+                    self.log("   ¡TODO LISTO! BLOQUEO REMOVIDO          ")
                     self.log("==========================================")
-                    messagebox.showinfo("Éxito", "FRP Borrado.")
+                    messagebox.showinfo("Éxito", "FRP Borrado correctamente.")
+                elif result == "NO_5F":
+                    self.log("ERROR: El celular no envió la señal de inicio (0x5F).")
+                    self.log("Esto pasa si el celular ya encendió o está en modo carga.")
                 else:
-                    self.log("ERROR: Falló la sincronización Handshake.")
+                    self.log(f"ERROR TÉCNICO: {result}")
+                    self.log("El celular respondió al inicio pero falló la sincronización.")
+                    self.log("CONSEJO: Intenta conectar el cable con los botones presionados MÁS RÁPIDO.")
+
                 mtk.ser.close()
             else:
-                self.log("ERROR: No se pudo abrir el puerto (Ocupado o desconectado).")
+                self.log("ERROR: No se pudo abrir el puerto.")
         except Exception as e:
             self.log(f"ERROR: {str(e)}")
         finally:
