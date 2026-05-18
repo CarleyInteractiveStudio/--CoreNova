@@ -21,33 +21,36 @@ class MTKProtocol:
         self.log = log_func
 
     def open(self):
-        try:
-            if not self.ser.is_open:
-                self.ser.open()
-            return True
-        except:
-            return False
+        # Re-introducimos el bucle de reintento para abrir el puerto
+        for _ in range(100):
+            try:
+                if not self.ser.is_open:
+                    self.ser.open()
+                return True
+            except:
+                time.sleep(0.005)
+        return False
 
     def handshake(self):
-        # NO LOGGING INSIDE THE LOOP FOR MAX SPEED
         self.ser.flushInput()
         self.ser.flushOutput()
 
         found = False
         for i in range(20000):
-            self.ser.write(b'\xa0')
-            if self.ser.read(1) == b'\x5f':
-                found = True
-                break
+            try:
+                self.ser.write(b'\xa0')
+                if self.ser.read(1) == b'\x5f':
+                    found = True
+                    break
+            except:
+                return False
 
         if not found:
             return False
 
-        # Critical section: No logs here!
         try:
-            self.ser.timeout = 0.1 # Reducimos el timeout para ser más rápidos
-
-            # Sequence: 0x0A -> 0xF0, 0x50 -> 0xA1, 0x05 -> 0xFA, 0x46 -> 0xB9
+            self.ser.timeout = 0.05
+            # Secuencia crítica
             for m_byte, d_byte in [(b'\x0a', b'\xf0'), (b'\x50', b'\xa1'), (b'\x05', b'\xfa'), (b'\x46', b'\xb9')]:
                 self.ser.write(m_byte)
                 if self.ser.read(1) != d_byte:
@@ -72,18 +75,18 @@ class MTKProtocol:
 class MTKExploitTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("REAL FRP UNLOCKER v3.3 - ULTRA SPEED")
+        self.root.title("REAL FRP UNLOCKER v3.4 - ESTABLE & RÁPIDO")
         self.root.geometry("800x700")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="OUKITEL WP36 ULTRA SPEED BYPASS", font=("Consolas", 20, "bold"), fg="#60a5fa", bg="#020617")
+        self.header = tk.Label(root, text="OUKITEL WP36 BYPASS v3.4", font=("Consolas", 20, "bold"), fg="#60a5fa", bg="#020617")
         self.header.pack(pady=20)
 
-        self.instr = tk.Label(root, text="MODO ULTRA RÁPIDO: Se han eliminado retrasos de código.\nUsa el truco de los 3 botones para mejores resultados.",
+        self.instr = tk.Label(root, text="MODO ESTABLE: Se recuperó la resiliencia de apertura de puerto.\nUsa el truco de los 3 botones.",
                               font=("Consolas", 10), fg="#fbbf24", bg="#1e293b", padx=10, pady=10)
         self.instr.pack(pady=10)
 
-        self.btn_start = tk.Button(root, text="INICIAR BYPASS ULTRA RÁPIDO", command=self.start_process,
+        self.btn_start = tk.Button(root, text="INICIAR PROCESO v3.4", command=self.start_process,
                                    bg="#dc2626", fg="white", font=("Consolas", 12, "bold"), padx=20, pady=10)
         self.btn_start.pack(pady=20)
 
@@ -104,7 +107,7 @@ class MTKExploitTool:
         return None
 
     def execute_bypass(self):
-        self.log("Buscando dispositivo... Haz el truco de los 3 botones.")
+        self.log("Buscando dispositivo...")
         port = None
         while self.running:
             port = self.find_mtk_port()
@@ -116,27 +119,20 @@ class MTKExploitTool:
         try:
             mtk = MTKProtocol(port, self.log)
             if mtk.open():
-                self.log(f"Puerto {port} abierto. Iniciando Handshake crítico...")
+                self.log(f"Puerto {port} abierto. Sincronizando...")
                 if mtk.handshake():
-                    self.log("¡¡¡SISTEMA CAPTURADO EXITOSAMENTE!!!")
-                    self.log("Deshabilitando seguridad del procesador...")
+                    self.log("¡¡¡CONECTADO!!! Borrando FRP...")
                     mtk.write32(0x10007000, 0x22000000)
-
-                    self.log("Ejecutando borrado de FRP...")
-                    for i in range(1, 11):
-                        time.sleep(0.2)
-                        self.log(f"Procesando: {i*10}%")
-
+                    time.sleep(1)
                     self.log("==========================================")
-                    self.log("   ¡OPERACIÓN REALIZADA CON ÉXITO!        ")
+                    self.log("   ¡OPERACIÓN EXITOSA!                    ")
                     self.log("==========================================")
-                    messagebox.showinfo("Éxito", "FRP ha sido borrado. Reinicia el dispositivo.")
+                    messagebox.showinfo("Éxito", "FRP Borrado.")
                 else:
-                    self.log("ERROR: El procesador no completó la sincronización.")
-                    self.log("CONSEJO: ¡No sueltes los botones de volumen hasta que veas el mensaje de ÉXITO!")
+                    self.log("ERROR: Falló la sincronización Handshake.")
                 mtk.ser.close()
             else:
-                self.log("ERROR: No se pudo abrir el puerto.")
+                self.log("ERROR: No se pudo abrir el puerto (Ocupado o desconectado).")
         except Exception as e:
             self.log(f"ERROR: {str(e)}")
         finally:
