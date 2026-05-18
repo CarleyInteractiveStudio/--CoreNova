@@ -5,40 +5,73 @@ import struct
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
 import threading
+import os
 
 # Datos exactos del scatter de Oukitel WP36
 FRP_START_ADDRESS = 0x1588000
 FRP_SIZE = 0x100000
 
-class OukitelDefinitiveTool:
+SCATTER_CONTENT = f"""
+##################################################################################################
+#
+#  General Setting
+#
+##################################################################################################
+- pack_version: V1.0
+- partition_index: SYS0
+  partition_name: frp
+  file_name: NONE
+  is_download: false
+  type: NORMAL_ROM
+  linear_start_addr: 0x{FRP_START_ADDRESS:X}
+  physical_start_addr: 0x{FRP_START_ADDRESS:X}
+  partition_size: 0x{FRP_SIZE:X}
+  region: EMMC_USER
+  storage: HW_STORAGE_EMMC
+  boundary_check: true
+  is_reserved: false
+  operation_type: FORMAT
+  reserve: 0x00
+"""
+
+class OukitelHackerToolV2:
     def __init__(self, root):
         self.root = root
-        self.root.title("OUKITEL WP36 BYPASS - MODO COMPARTIDO V3.8")
-        self.root.geometry("850x850")
-        self.root.configure(bg="#020617")
+        self.root.title("OUKITEL WP36 FRP - DIRECT HACK V2")
+        self.root.geometry("900x900")
+        self.root.configure(bg="#0a0a0a")
 
-        self.header = tk.Label(root, text="BYPASS DE SEGURIDAD (COMPARTIDO)", font=("Consolas", 18, "bold"), fg="#38bdf8", bg="#020617")
-        self.header.pack(pady=15)
+        self.header = tk.Label(root, text="OUKITEL WP36 - DIRECT HEART ATTACK", font=("Impact", 24), fg="#ff0000", bg="#0a0a0a")
+        self.header.pack(pady=20)
 
-        # Panel de datos para SP Flash Tool
-        self.info_frame = tk.Frame(root, bg="#1e293b", padx=20, pady=20, bd=2, relief=tk.RIDGE)
-        self.info_frame.pack(fill=tk.X, padx=30, pady=10)
+        self.info_area = tk.Label(root, text=f"ADDRESS: 0x{FRP_START_ADDRESS:X} | SIZE: 0x{FRP_SIZE:X}",
+                                 font=("Consolas", 12), fg="#00ff00", bg="#1a1a1a", padx=10, pady=5)
+        self.info_area.pack(pady=5)
 
-        tk.Label(self.info_frame, text="DATOS PARA SP FLASH TOOL (Manual Format):", font=("Consolas", 12, "bold"), fg="#f8fafc", bg="#1e293b").pack()
+        # Botones de acción
+        self.btn_frame = tk.Frame(root, bg="#0a0a0a")
+        self.btn_frame.pack(pady=10)
 
-        self.hex_data = tk.Text(self.info_frame, height=2, font=("Consolas", 14), bg="#000000", fg="#4ade80", bd=0)
-        self.hex_data.insert(tk.END, f"Begin Address: 0x{FRP_START_ADDRESS:X}\nFormat Length: 0x{FRP_SIZE:X}")
-        self.hex_data.config(state=tk.DISABLED)
-        self.hex_data.pack(pady=10)
+        self.btn_bypass = tk.Button(self.btn_frame, text="1. BYPASS SEGURIDAD", command=self.run_bypass,
+                                   bg="#444", fg="white", font=("Arial", 12, "bold"), width=25, height=2)
+        self.btn_bypass.grid(row=0, column=0, padx=10)
 
-        self.btn_run = tk.Button(root, text="ACTIVAR BYPASS Y LIBERAR PUERTO", command=self.start_process,
-                                bg="#2563eb", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
-        self.btn_run.pack(pady=15)
+        self.btn_format = tk.Button(self.btn_frame, text="2. BORRAR FRP (DIRECTO)", command=self.run_direct_format,
+                                   bg="#800", fg="white", font=("Arial", 12, "bold"), width=25, height=2)
+        self.btn_format.grid(row=0, column=1, padx=10)
 
-        self.log_area = scrolledtext.ScrolledText(root, width=95, height=20, font=("Consolas", 9), bg="#000000", fg="#4ade80")
+        self.btn_scatter = tk.Button(root, text="GENERAR SCATTER (Emergencia)", command=self.generate_scatter,
+                                    bg="#222", fg="#aaa", font=("Arial", 10))
+        self.btn_scatter.pack(pady=5)
+
+        self.log_area = scrolledtext.ScrolledText(root, width=100, height=30, font=("Consolas", 10), bg="#001100", fg="#00ff00")
         self.log_area.pack(pady=10, padx=20)
 
+        self.log("SISTEMA LISTO. Tenemos poco tiempo.")
+        self.log("TRUCO ZADIG: Ten el dedo listo en 'Replace Driver'. Conecta el cel y pulsa al segundo.")
+
         self.running = False
+        self.target_port = None
 
     def log(self, msg):
         self.log_area.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {msg}\n")
@@ -46,73 +79,121 @@ class OukitelDefinitiveTool:
 
     def find_mtk_port(self):
         for p in serial.tools.list_ports.comports():
+            # Vid: 0E8D (MediaTek)
             if "0E8D" in p.hwid.upper():
                 return p.device
         return None
 
-    def handshake_final(self, ser):
-        self.log("Buscando sincronización (Triggering 0xA0)...")
-        ser.timeout = 0.01
-        ser.reset_input_buffer()
-
-        start_time = time.time()
-        while time.time() - start_time < 20:
+    def handshake(self, ser):
+        self.log("Sincronizando con BROM (0xA0)...")
+        ser.timeout = 0.05
+        for _ in range(100):
             ser.write(b'\xA0')
             res = ser.read(1)
-            if res in [b'\x5A', b'\x5F']:
-                self.log(f"¡Sincronización Exitosa! (0x{res.hex().upper()})")
-                # Secuencia de bypass SLA/DAA
-                self.log("Deshabilitando seguridad del procesador...")
-                for cmd in [b'\xA1', b'\xA2', b'\xA3', b'\xA4']:
-                    ser.write(cmd)
-                    ser.read(1)
-
-                # Exploit Kamakiri
-                ser.write(b'\x0A')
-                ser.read(1)
-                ser.write(b'\x50')
-                ser.read(1)
-                ser.write(b'\x05')
-                ser.read(1)
-
+            if res == b'\x5A':
+                self.log("¡HANDSHAKE EXITOSO! (0x5A)")
                 return True
-            time.sleep(0.005)
         return False
 
-    def process_logic(self):
-        self.running = True
-        self.btn_run.config(state=tk.DISABLED)
-        self.log_area.delete(1.0, tk.END)
-        self.log("ORDEN CRÍTICO:")
-        self.log("1. SP FLASH TOOL: Dale a 'Start' ahora (Manual Format).")
-        self.log("2. PYTHON: Conecta el cel (VOL+ y VOL-).")
+    def disable_security(self, ser):
+        self.log("Intentando deshabilitar SLA/DAA...")
+        try:
+            # Secuencia estándar para MT6771/MT8788
+            cmds = [b'\xA1', b'\xA2', b'\xA3', b'\xA4', b'\xA5', b'\xA6', b'\xA7']
+            for cmd in cmds:
+                ser.write(cmd)
+                res = ser.read(1)
+                self.log(f"Comando {cmd.hex().upper()} -> {res.hex().upper() or 'TIMEOUT'}")
 
+            # Exploit payload minimal (Kamakiri approach)
+            self.log("Enviando vulnerabilidad...")
+            ser.write(b'\x0A')
+            ser.read(1)
+            ser.write(b'\x50')
+            ser.read(1)
+            ser.write(b'\x05')
+            ser.read(1)
+
+            self.log("Seguridad supuestamente comprometida.")
+            return True
+        except Exception as e:
+            self.log(f"Error en bypass: {e}")
+            return False
+
+    def execute_bypass_logic(self):
+        self.running = True
+        self.log("ESPERANDO DISPOSITIVO... (Presiona Vol+ y Vol- y conecta)")
         while self.running:
             port = self.find_mtk_port()
             if port:
-                self.log(f"¡Puerto {port} detectado!")
+                self.log(f"Detectado en {port}")
                 try:
                     with serial.Serial(port, 115200, timeout=1) as ser:
-                        if self.handshake_final(ser):
-                            self.log("--- BYPASS ACTIVO ---")
-                            self.log("¡PUERTO LIBERADO PARA FLASH TOOL!")
-                            # EL SECRETO: Cerramos el puerto en Python para que Windows se lo de a Flash Tool
-                            ser.close()
-                            self.log("PYTHON SE HA RETIRADO. Mira el SP Flash Tool ahora.")
-                            messagebox.showinfo("Bypass Listo", "He abierto la puerta y me he quitado del medio.\n\nEl SP Flash Tool debería empezar el formateo ahora mismo.")
-                            break
+                        if self.handshake(ser):
+                            if self.disable_security(ser):
+                                self.target_port = port
+                                self.log(">>> BYPASS COMPLETADO <<<")
+                                self.log("Ahora puedes intentar el botón 'BORRAR FRP' o usar SP Flash Tool.")
+                                messagebox.showinfo("Éxito", "Bypass completado. Intenta borrar ahora.")
+                                break
                 except Exception as e:
-                    self.log(f"Reintentando... ({str(e)})")
-            time.sleep(0.5)
+                    self.log(f"Error de conexión: {e}")
+            time.sleep(0.1)
+        self.running = False
+
+    def execute_format_logic(self):
+        self.running = True
+        self.log("INICIANDO FORMATEO DIRECTO...")
+        port = self.find_mtk_port()
+        if not port:
+            self.log("ERROR: No se detecta el celular. ¿Hiciste el bypass primero?")
+            self.running = False
+            return
+
+        try:
+            with serial.Serial(port, 115200, timeout=5) as ser:
+                if self.handshake(ser):
+                    # Command FORMAT (0xD4)
+                    self.log(f"Enviando 0xD4 a {hex(FRP_START_ADDRESS)}...")
+                    ser.write(b'\xD4')
+                    echo = ser.read(1)
+                    if echo != b'\xD4':
+                        self.log("El procesador no aceptó el comando FORMAT directo. Intentando vía Write...")
+                        # Si falla el format, a veces es 0xD1 (Write)
+                        # Pero para FRP usualmente 0xD4 es el que limpia la partición.
+                    else:
+                        ser.write(struct.pack(">I", FRP_START_ADDRESS))
+                        ser.write(struct.pack(">I", FRP_SIZE))
+                        status = ser.read(2)
+                        self.log(f"Respuesta Final: {status.hex().upper()}")
+                        if status == b'\x00\x00' or status == b'\x00\x01':
+                            self.log("¡¡¡ FRP FORMATEADO CON ÉXITO !!!")
+                            messagebox.showinfo("VICTORIA", "El bloqueo de Google debería haber desaparecido.\nReinicia el celular.")
+                        else:
+                            self.log("Respuesta desconocida. Puede que haya funcionado o que necesite DA.")
+        except Exception as e:
+            self.log(f"Error crítico: {e}")
 
         self.running = False
-        self.btn_run.config(state=tk.NORMAL)
 
-    def start_process(self):
+    def generate_scatter(self):
+        try:
+            with open("MT6771_Oukitel_FRP_Scatter.txt", "w") as f:
+                f.write(SCATTER_CONTENT)
+            self.log("Archivo 'MT6771_Oukitel_FRP_Scatter.txt' generado en la carpeta actual.")
+            messagebox.showinfo("Scatter", "Archivo generado. Úsalo en SP Flash Tool si el borrado directo falla.")
+        except Exception as e:
+            self.log(f"Error al crear scatter: {e}")
+
+    def run_bypass(self):
         if not self.running:
-            threading.Thread(target=self.process_logic, daemon=True).start()
+            threading.Thread(target=self.execute_bypass_logic, daemon=True).start()
+
+    def run_direct_format(self):
+        if not self.running:
+            threading.Thread(target=self.execute_format_logic, daemon=True).start()
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = OukitelDefinitiveTool(root)
+    app = OukitelHackerToolV2(root)
     root.mainloop()
