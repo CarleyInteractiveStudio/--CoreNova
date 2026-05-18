@@ -13,11 +13,11 @@ FRP_SIZE = 0x100000
 class OukitelDefinitiveTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("OUKITEL WP36 BYPASS - MÉTODO HÍBRIDO FINAL")
+        self.root.title("OUKITEL WP36 BYPASS - MODO COMPARTIDO V3.8")
         self.root.geometry("850x850")
         self.root.configure(bg="#020617")
 
-        self.header = tk.Label(root, text="BYPASS DE SEGURIDAD (SLA/DAA)", font=("Consolas", 18, "bold"), fg="#38bdf8", bg="#020617")
+        self.header = tk.Label(root, text="BYPASS DE SEGURIDAD (COMPARTIDO)", font=("Consolas", 18, "bold"), fg="#38bdf8", bg="#020617")
         self.header.pack(pady=15)
 
         # Panel de datos para SP Flash Tool
@@ -31,7 +31,7 @@ class OukitelDefinitiveTool:
         self.hex_data.config(state=tk.DISABLED)
         self.hex_data.pack(pady=10)
 
-        self.btn_run = tk.Button(root, text="ACTIVAR BYPASS Y ABRIR PUERTO", command=self.start_process,
+        self.btn_run = tk.Button(root, text="ACTIVAR BYPASS Y LIBERAR PUERTO", command=self.start_process,
                                 bg="#2563eb", fg="white", font=("Consolas", 12, "bold"), padx=30, pady=15)
         self.btn_run.pack(pady=15)
 
@@ -67,7 +67,7 @@ class OukitelDefinitiveTool:
                     ser.write(cmd)
                     ser.read(1)
 
-                # Intentamos el exploit Kamakiri básico
+                # Exploit Kamakiri
                 ser.write(b'\x0A')
                 ser.read(1)
                 ser.write(b'\x50')
@@ -83,9 +83,9 @@ class OukitelDefinitiveTool:
         self.running = True
         self.btn_run.config(state=tk.DISABLED)
         self.log_area.delete(1.0, tk.END)
-        self.log("1. Prepara el SP Flash Tool con los datos de arriba.")
-        self.log("2. Presiona 'Start' en SP Flash Tool.")
-        self.log("3. Conecta el cel (VOL+ y VOL-) para activar el Bypass.")
+        self.log("ORDEN CRÍTICO:")
+        self.log("1. SP FLASH TOOL: Dale a 'Start' ahora (Manual Format).")
+        self.log("2. PYTHON: Conecta el cel (VOL+ y VOL-).")
 
         while self.running:
             port = self.find_mtk_port()
@@ -95,13 +95,14 @@ class OukitelDefinitiveTool:
                     with serial.Serial(port, 115200, timeout=1) as ser:
                         if self.handshake_final(ser):
                             self.log("--- BYPASS ACTIVO ---")
-                            self.log("Seguridad deshabilitada temporalmente.")
-                            self.log("AHORA: El SP Flash Tool debería detectar el puerto y terminar el borrado.")
-                            self.log("Mantén el celular conectado...")
-                            messagebox.showinfo("Bypass Activo", "La seguridad ha sido saltada.\n\nDeja el celular conectado y deja que SP Flash Tool haga el trabajo ahora.")
+                            self.log("¡PUERTO LIBERADO PARA FLASH TOOL!")
+                            # EL SECRETO: Cerramos el puerto en Python para que Windows se lo de a Flash Tool
+                            ser.close()
+                            self.log("PYTHON SE HA RETIRADO. Mira el SP Flash Tool ahora.")
+                            messagebox.showinfo("Bypass Listo", "He abierto la puerta y me he quitado del medio.\n\nEl SP Flash Tool debería empezar el formateo ahora mismo.")
                             break
                 except Exception as e:
-                    self.log(f"Esperando liberación de puerto... ({str(e)})")
+                    self.log(f"Reintentando... ({str(e)})")
             time.sleep(0.5)
 
         self.running = False
