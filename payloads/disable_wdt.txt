@@ -1,4 +1,0 @@
-# Payload: Disable Watchdog (WDT)
-# Este payload evita que el celular se reinicie automáticamente durante el bypass.
-0x10007000: 0x2200 # WDT_MODE
-0x10007008: 0x1971 # WDT_RESTART
