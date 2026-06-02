@@ -1,19 +1,17 @@
-# OUKITEL WP36 FRP HACKER TOOL
+# QUALCOMM PRO UNLOCKER
 
-Herramienta profesional para eliminar el bloqueo de cuenta Google (FRP) en dispositivos Oukitel WP36 con procesador MediaTek MT8788.
+Herramienta profesional para eliminar bloqueos de pantalla y cuenta Google (FRP) en dispositivos con procesador Qualcomm (Snapdragon).
 
-## REQUISITOS OBLIGATORIOS (WINDOWS)
+## DISPOSITIVOS SOPORTADOS
+- BlackBerry KEYone (Snapdragon 625)
+- Genéricos con procesadores MSM8953, MSM8937, MSM8917.
 
-Para que el script pueda "hablar" directamente con el procesador, necesitas preparar los drivers:
+## REQUISITOS (WINDOWS)
 
-1.  **Drivers VCOM:** Debes tener instalados los drivers de MediaTek.
-2.  **Filtro LibUSB (CRÍTICO):**
-    *   Descarga **Zadig** (https://zadig.akeo.ie/).
-    *   Conecta el celular apagado presionando **Volumen+ y Volumen-**.
-    *   En Zadig, ve a `Options` -> `List All Devices`.
-    *   Busca el dispositivo que diga **"MediaTek USB Port"** o **"Preloader USB VCOM"**.
-    *   Selecciona el driver **libusb-win32 (v1.2.6.0)** y dale a **"Replace Driver"**.
-    *   *Nota: Tienes que ser rápido porque el celular solo se queda en ese modo unos segundos.*
+Para que el script pueda comunicarse con el procesador en modo EDL, necesitas los drivers adecuados:
+
+1.  **Drivers Qualcomm HS-USB QDLoader 9008:** Esenciales para que Windows reconozca el puerto COM.
+2.  **Cable USB de buena calidad.**
 
 ## INSTALACIÓN
 
@@ -23,16 +21,16 @@ Para que el script pueda "hablar" directamente con el procesador, necesitas prep
    pip install -r requirements.txt
    ```
 
-## MODO DE USO
+## MODO DE USO (COMO CONECTAR)
 
-1. Ejecuta el programa:
+1. Apaga el celular completamente.
+2. Mantén presionados **VOLUMEN ARRIBA + VOLUMEN ABAJO**.
+3. Conecta el cable USB mientras mantienes los botones.
+4. Ejecuta el programa:
    ```bash
    python frp_bypass_tool.py
    ```
-2. Haz clic en el botón rojo **"EJECUTAR HACK"**.
-3. El programa dirá: "ESPERANDO DISPOSITIVO".
-4. Con el celular **APAGADO**, presiona **AMBOS BOTONES DE VOLUMEN** y conecta el cable USB.
-5. El programa detectará el celular, saltará la seguridad y borrará el bloqueo en menos de 5 segundos.
+5. Ve a la pestaña de **CONTROL PRINCIPAL** y dale a **CONECTAR**.
 
 ---
-**Desarrollado para la competencia de hackeo de dispositivos.**
+**Nota:** Para quitar el bloqueo sin borrar fotos, usa la pestaña de **FUERZA BRUTA** si tienes el hash de la contraseña.
